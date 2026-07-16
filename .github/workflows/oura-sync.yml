@@ -1,7 +1,7 @@
 name: Oura Sync
 on:
   schedule:
-    - cron: "30 20 * * *"  # 毎朝 5:30 JST
+    - cron: "15 */2 * * *"  # 2時間おきに同期
   workflow_dispatch:
 permissions:
   contents: write
