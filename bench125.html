@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0d0d0d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="BENCH125">
+<title>BENCH125 — ベンチプレス125kgコーチ</title>
+<style>
+:root {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface-1: #1a1a19;
+  --surface-2: #232322;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --baseline: #383835;
+  --border: rgba(255,255,255,0.10);
+  --series-1: #3987e5;      /* blue  */
+  --series-1-dim: #1c5cab;
+  --series-1-wash: rgba(57,135,229,0.10);
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+  --good-text: #0ca30c;
+  --radius: 14px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { font-size: 16px; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+  background: var(--page);
+  color: var(--text-primary);
+  line-height: 1.55;
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  min-height: 100vh;
+}
+header.app-header {
+  padding: calc(14px + env(safe-area-inset-top)) 18px 10px;
+  display: flex; align-items: baseline; justify-content: space-between;
+}
+header.app-header h1 { font-size: 1.05rem; font-weight: 800; letter-spacing: 0.04em; }
+header.app-header h1 span { color: var(--series-1); }
+header.app-header .date { font-size: 0.8rem; color: var(--text-muted); }
+
+main { padding: 0 14px; max-width: 560px; margin: 0 auto; }
+.screen { display: none; }
+.screen.active { display: block; animation: fadein .18s ease; }
+@keyframes fadein { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: none;} }
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.card h2 { font-size: 0.82rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 10px; letter-spacing: 0.02em; }
+.card h2 .sub { font-weight: 400; color: var(--text-muted); }
+
+/* ---- stat tiles ---- */
+.kpi-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+.tile .label { font-size: 0.72rem; color: var(--text-muted); }
+.tile .value { font-size: 1.55rem; font-weight: 650; margin-top: 2px; }
+.tile .value small { font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); }
+.tile .delta { font-size: 0.72rem; margin-top: 2px; color: var(--text-secondary); }
+.tile .delta.up { color: var(--good-text); }
+
+.hero { text-align: left; padding: 18px 16px; }
+.hero .label { font-size: 0.78rem; color: var(--text-muted); }
+.hero .num { font-size: 52px; font-weight: 700; line-height: 1.1; }
+.hero .num small { font-size: 20px; font-weight: 500; color: var(--text-secondary); }
+
+/* ---- condition badge ---- */
+.cond-badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 12px; border-radius: 999px;
+  font-size: 0.82rem; font-weight: 700;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.cond-badge .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+/* ---- workout list ---- */
+.exercise { border-top: 1px solid var(--grid); padding: 12px 0; }
+.exercise:first-of-type { border-top: none; }
+.exercise .ex-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.exercise .ex-name { font-weight: 700; font-size: 0.95rem; }
+.exercise .ex-target { font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap; }
+.exercise .ex-note { font-size: 0.76rem; color: var(--text-muted); margin-top: 2px; }
+.exercise .ex-adj { font-size: 0.76rem; margin-top: 2px; }
+.set-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.set-chip {
+  min-width: 44px; min-height: 44px; padding: 4px 10px;
+  border-radius: 10px; border: 1px solid var(--baseline);
+  background: var(--surface-2); color: var(--text-secondary);
+  font-size: 0.85rem; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; user-select: none;
+}
+.set-chip.done { background: var(--series-1-dim); border-color: var(--series-1); color: #fff; }
+
+/* ---- buttons & inputs ---- */
+button.btn {
+  width: 100%; padding: 13px; border-radius: 12px; border: none;
+  background: var(--series-1); color: #fff; font-size: 0.95rem; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+}
+button.btn.secondary { background: var(--surface-2); color: var(--text-primary); border: 1px solid var(--border); }
+button.btn.small { width: auto; padding: 8px 14px; font-size: 0.82rem; }
+button.btn:active { opacity: 0.85; }
+.btn-row { display: flex; gap: 8px; }
+.btn-row button { flex: 1; }
+
+label.field { display: block; margin-bottom: 12px; }
+label.field .fl { font-size: 0.76rem; color: var(--text-muted); margin-bottom: 4px; display: block; }
+input[type="text"], input[type="password"], input[type="number"], input[type="date"], select, textarea {
+  width: 100%; padding: 11px 12px; border-radius: 10px;
+  border: 1px solid var(--baseline); background: var(--surface-2);
+  color: var(--text-primary); font-size: 16px; font-family: inherit;
+}
+input[type="range"] { width: 100%; accent-color: var(--series-1); }
+.range-val { font-weight: 700; font-size: 0.95rem; }
+
+/* ---- coach card ---- */
+.coach-card { border-left: 3px solid var(--series-1); }
+.coach-card p { font-size: 0.9rem; color: var(--text-secondary); }
+.coach-card p strong { color: var(--text-primary); }
+.coach-card p + p { margin-top: 8px; }
+
+/* ---- program table ---- */
+.week-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 4px; border-top: 1px solid var(--grid);
+}
+.week-row:first-child { border-top: none; }
+.week-row .wk { width: 42px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary); flex-shrink: 0; }
+.week-row .wk-info { flex: 1; min-width: 0; }
+.week-row .wk-name { font-size: 0.85rem; font-weight: 600; }
+.week-row .wk-detail { font-size: 0.74rem; color: var(--text-muted); }
+.week-row .wk-status { font-size: 0.72rem; color: var(--text-muted); flex-shrink: 0; }
+.week-row.current { background: var(--series-1-wash); border-radius: 10px; padding-left: 8px; padding-right: 8px; }
+.week-row.current .wk { color: var(--series-1); }
+.block-head { font-size: 0.74rem; font-weight: 700; color: var(--text-muted); letter-spacing: 0.06em; margin: 14px 0 4px; }
+.block-head:first-child { margin-top: 0; }
+
+/* ---- charts ---- */
+.chart-wrap { position: relative; }
+.chart-wrap svg { display: block; width: 100%; height: auto; }
+.viz-tooltip {
+  position: absolute; pointer-events: none; z-index: 5;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px 10px; font-size: 0.75rem;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+  display: none; min-width: 110px;
+}
+.viz-tooltip .tt-date { color: var(--text-muted); margin-bottom: 3px; }
+.viz-tooltip .tt-row { display: flex; align-items: center; gap: 6px; }
+.viz-tooltip .tt-key { width: 12px; height: 2px; border-radius: 1px; flex-shrink: 0; }
+.viz-tooltip .tt-val { font-weight: 700; color: var(--text-primary); }
+.viz-tooltip .tt-name { color: var(--text-secondary); }
+
+/* ---- tab bar ---- */
+nav.tabbar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: rgba(26,26,25,0.96);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  display: flex;
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  z-index: 20;
+}
+nav.tabbar button {
+  flex: 1; background: none; border: none; color: var(--text-muted);
+  font-size: 0.66rem; font-family: inherit; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 6px 0; border-radius: 10px; min-height: 48px;
+}
+nav.tabbar button svg { width: 22px; height: 22px; }
+nav.tabbar button.active { color: var(--series-1); }
+
+/* ---- misc ---- */
+.pill-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill {
+  padding: 8px 13px; min-height: 40px; border-radius: 999px; border: 1px solid var(--baseline);
+  background: var(--surface-2); color: var(--text-secondary);
+  font-size: 0.82rem; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.pill.on { background: var(--series-1-dim); border-color: var(--series-1); color: #fff; }
+.muted { color: var(--text-muted); font-size: 0.78rem; }
+.small-note { font-size: 0.74rem; color: var(--text-muted); margin-top: 8px; }
+.sync-status { font-size: 0.78rem; margin-top: 8px; }
+.sync-status.ok { color: var(--good-text); }
+.sync-status.err { color: var(--status-critical); }
+.divider { height: 1px; background: var(--grid); margin: 14px 0; }
+.banner {
+  background: var(--surface-2); border: 1px solid var(--status-warning);
+  border-radius: 12px; padding: 10px 14px; font-size: 0.8rem;
+  color: var(--text-secondary); margin-bottom: 12px; display: none;
+}
+details.help { margin-top: 10px; }
+details.help summary { font-size: 0.8rem; color: var(--series-1); cursor: pointer; }
+details.help .help-body { font-size: 0.78rem; color: var(--text-secondary); margin-top: 8px; }
+details.help .help-body ol { padding-left: 18px; }
+details.help .help-body li { margin-bottom: 4px; }
+details.help .help-body a { color: var(--series-1); }
+.onboard-overlay {
+  position: fixed; inset: 0; background: var(--page); z-index: 50;
+  overflow-y: auto; padding: calc(24px + env(safe-area-inset-top)) 18px 40px;
+  display: none;
+}
+.onboard-overlay.show { display: block; }
+.onboard-inner { max-width: 480px; margin: 0 auto; }
+.onboard-inner h1 { font-size: 1.5rem; margin-bottom: 4px; }
+.onboard-inner h1 span { color: var(--series-1); }
+.onboard-inner .lead { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 20px; }
+.table-view { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin-top: 8px; }
+.table-view th, .table-view td { text-align: right; padding: 5px 6px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+.table-view th:first-child, .table-view td:first-child { text-align: left; }
+.table-view th { color: var(--text-muted); font-weight: 600; }
+.toggle-table { background: none; border: none; color: var(--series-1); font-size: 0.76rem; cursor: pointer; font-family: inherit; padding: 6px 0; }
+</style>
+</head>
+<body>
+
+<!-- ======== onboarding ======== -->
+<div class="onboard-overlay" id="onboard">
+  <div class="onboard-inner">
+    <h1>BENCH<span>125</span></h1>
+    <p class="lead">Oura Ring 4 と Pixel Watch 3 のコンディションデータで毎日の重量を自動調整する、あなた専用のベンチプレスコーチ。</p>
+    <div class="card">
+      <h2>初期設定</h2>
+      <label class="field"><span class="fl">現在のベンチプレスMAX(kg)— 挙がるギリギリの重量</span>
+        <input type="number" id="ob-max" value="112.5" step="2.5" inputmode="decimal"></label>
+      <label class="field"><span class="fl">目標重量(kg)</span>
+        <input type="number" id="ob-goal" value="125" step="2.5" inputmode="decimal"></label>
+      <label class="field"><span class="fl">ジムでベンチをやる曜日</span>
+        <select id="ob-day">
+          <option value="1">月曜日</option><option value="2">火曜日</option><option value="3">水曜日</option>
+          <option value="4">木曜日</option><option value="5">金曜日</option><option value="6" selected>土曜日</option><option value="0">日曜日</option>
+        </select></label>
+      <label class="field"><span class="fl">プログラム開始日</span>
+        <input type="date" id="ob-start"></label>
+      <button class="btn" id="ob-go">18週間プログラムを生成する</button>
+      <p class="small-note">MAXはケツ上げなしで確実に挙がる重量に近い値を。115kgがギリギリ(ケツ上げ)なら 110〜112.5kg が目安です。</p>
+    </div>
+  </div>
+</div>
+
+<header class="app-header">
+  <h1>BENCH<span>125</span></h1>
+  <div class="date" id="today-date"></div>
+</header>
+
+<main>
+  <div class="banner" id="storage-banner">⚠️ このブラウザでは保存が使えません。設定画面からデータのエクスポートをこまめに行ってください。</div>
+
+  <!-- ======== TODAY ======== -->
+  <section class="screen active" id="screen-today"></section>
+
+  <!-- ======== PROGRAM ======== -->
+  <section class="screen" id="screen-program"></section>
+
+  <!-- ======== PROGRESS ======== -->
+  <section class="screen" id="screen-progress"></section>
+
+  <!-- ======== SETTINGS ======== -->
+  <section class="screen" id="screen-settings"></section>
+</main>
+
+<nav class="tabbar">
+  <button data-tab="today" class="active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/></svg>
+    今日
+  </button>
+  <button data-tab="program">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M8 2v4M16 2v4M3 9h18"/></svg>
+    プログラム
+  </button>
+  <button data-tab="progress">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19L9 13l4 3 7-9"/><path d="M16 7h4v4"/></svg>
+    進捗
+  </button>
+  <button data-tab="settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
+    連携
+  </button>
+</nav>
+
+<script>
+"use strict";
+/* ================================================================
+   BENCH125 — ベンチプレス125kgコーチ
+   Oura Ring 4 + Pixel Watch 3 (Fitbit) 連携 / 自動調整プログラム
+================================================================ */
+
+/* ---------- storage (guarded) ---------- */
+const Store = (() => {
+  let mem = {};
+  let usable = false;
+  try {
+    localStorage.setItem("__t", "1"); localStorage.removeItem("__t");
+    usable = true;
+  } catch (e) { usable = false; }
+  return {
+    usable,
+    get(k, d) {
+      try { if (usable) { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } } catch(e){}
+      return (k in mem) ? mem[k] : d;
+    },
+    set(k, v) {
+      mem[k] = v;
+      try { if (usable) localStorage.setItem(k, JSON.stringify(v)); } catch(e){}
+    }
+  };
+})();
+
+/* ---------- state ---------- */
+const DEFAULTS = {
+  profile: null, // {maxStart, goal, benchDay, startDate, tm}
+  logs: {},      // dateISO -> {sets:{exIdx:[bool,...]}, topWeight, topReps, e1rm, note}
+  condition: {}, // dateISO -> {score, src, readiness, sleepScore, hrv, rhr, subjective}
+  tokens: { oura: "", fitbit: "" },
+  baseline: { hrv: null, rhr: null } // rolling baselines
+};
+let S = Store.get("bench125", null) || JSON.parse(JSON.stringify(DEFAULTS));
+function save() { Store.set("bench125", S); }
+
+/* ---------- date utils ---------- */
+const DAY = 86400000;
+const fmtISO = d => { const t = new Date(d.getTime() - d.getTimezoneOffset()*60000); return t.toISOString().slice(0,10); };
+const todayISO = () => fmtISO(new Date());
+const parseISO = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); };
+const WD = ["日","月","火","水","木","金","土"];
+const fmtJP = s => { const d = parseISO(s); return `${d.getMonth()+1}/${d.getDate()}(${WD[d.getDay()]})`; };
+const round25 = w => Math.round(w / 2.5) * 2.5;
+const epley = (w, r) => r <= 1 ? w : w * (1 + r / 30);
+
+/* ================================================================
+   プログラムエンジン — 18週 3ブロック + テスト週
+   TM (トレーニングマックス) = 確実に挙がる1RMの約97%
+================================================================ */
+const BLOCKS = [
+  { name: "基礎ボリューム", range: [1, 6],  desc: "筋量と作業能力を作る" },
+  { name: "筋力ブロック",   range: [7, 12], desc: "高重量に神経を慣らす" },
+  { name: "ピーキング",     range: [13, 17], desc: "1発の強さに研ぎ澄ます" },
+  { name: "挑戦",           range: [18, 18], desc: "125kgアタック" }
+];
+function blockOf(week) { return BLOCKS.find(b => week >= b.range[0] && week <= b.range[1]); }
+
+/* 週ごとのメイン(トップセット)処方: TMに対する% */
+const WEEK_PLAN = {
+  1:  { top: {pct: .775, reps: 5, sets: 1}, back: {pct: .70,  reps: 6, sets: 4}, label: "5回 @77.5%" },
+  2:  { top: {pct: .80,  reps: 5, sets: 1}, back: {pct: .715, reps: 6, sets: 4}, label: "5回 @80%" },
+  3:  { top: {pct: .825, reps: 5, sets: 1}, back: {pct: .73,  reps: 6, sets: 4}, label: "5回 @82.5%" },
+  4:  { top: {pct: .75,  reps: 5, sets: 1}, back: {pct: .675, reps: 5, sets: 3}, label: "軽め(回復週)", deload: true },
+  5:  { top: {pct: .84,  reps: 5, sets: 1}, back: {pct: .745, reps: 6, sets: 4}, label: "5回 @84%" },
+  6:  { top: {pct: .855, reps: 5, sets: 1}, back: {pct: .755, reps: 5, sets: 4}, label: "5回 @85.5% ※最終セット余力残し", amrap: true },
+  7:  { top: {pct: .85,  reps: 3, sets: 2}, back: {pct: .78,  reps: 4, sets: 4}, label: "3回×2 @85%" },
+  8:  { top: {pct: .875, reps: 3, sets: 2}, back: {pct: .79,  reps: 4, sets: 4}, label: "3回×2 @87.5%" },
+  9:  { top: {pct: .90,  reps: 3, sets: 1}, back: {pct: .80,  reps: 4, sets: 4}, label: "3回 @90%" },
+  10: { top: {pct: .775, reps: 3, sets: 2}, back: {pct: .70,  reps: 4, sets: 3}, label: "軽め(回復週)", deload: true },
+  11: { top: {pct: .915, reps: 3, sets: 1}, back: {pct: .81,  reps: 4, sets: 4}, label: "3回 @91.5%" },
+  12: { top: {pct: .93,  reps: 2, sets: 2}, back: {pct: .82,  reps: 3, sets: 3}, label: "2回×2 @93%", amrap: true },
+  13: { top: {pct: .925, reps: 2, sets: 2}, back: {pct: .85,  reps: 2, sets: 3}, label: "2回×2 @92.5%" },
+  14: { top: {pct: .95,  reps: 1, sets: 2}, back: {pct: .86,  reps: 2, sets: 3}, label: "1回×2 @95%" },
+  15: { top: {pct: .975, reps: 1, sets: 1}, back: {pct: .87,  reps: 2, sets: 2}, label: "1回 @97.5%" },
+  16: { top: {pct: 1.00, reps: 1, sets: 1}, back: {pct: .85,  reps: 2, sets: 2}, label: "1回 @100% TM" },
+  17: { top: {pct: .70,  reps: 3, sets: 3}, back: {pct: .60,  reps: 3, sets: 2}, label: "テーパー(爆発的に軽く)", deload: true },
+  18: { test: true, label: "🏆 125kg 挑戦の日" }
+};
+
+/* ジム・ベンチの日の補助種目 (ブロックにより変化) */
+function accessories(week) {
+  if (week <= 6) return [
+    { name: "止めベンチ(2秒止め)", detail: pct => `3セット × 6回 @ ${pct(.65)}kg`, note: "胸で完全に止めて爆発。ケツ上げ癖の矯正に最重要" },
+    { name: "ナローベンチ or ダンベルプレス", detail: () => "3セット × 10回", note: "三頭を厚く。125kgのロックアウトは三頭で決まる" },
+    { name: "バーベルロウ or ダンベルロウ", detail: () => "3セット × 10回", note: "土台の背中。アーチの安定=重量" }
+  ];
+  if (week <= 12) return [
+    { name: "止めベンチ(1秒止め)", detail: pct => `3セット × 3回 @ ${pct(.75)}kg`, note: "試技と同じ胸止めで強く" },
+    { name: "ナローベンチ", detail: pct => `3セット × 8回 @ ${pct(.60)}kg`, note: "三頭強化を継続" },
+    { name: "バーベルロウ", detail: () => "3セット × 8回", note: "重量を伸ばしていく" }
+  ];
+  if (week <= 16) return [
+    { name: "止めベンチ(1秒止め)", detail: pct => `2セット × 2回 @ ${pct(.80)}kg`, note: "重量に慣れる。丁寧に" },
+    { name: "ロウ系1種目", detail: () => "3セット × 8回", note: "背中は維持。疲労を溜めない" }
+  ];
+  return [];
+}
+
+/* 自宅の日 (ディップス/懸垂バー) */
+function homeSessions(week) {
+  const push = { type: "home-push", title: "自宅・プッシュ日(ディップス)", exercises: [] };
+  const pull = { type: "home-pull", title: "自宅・プル日(懸垂)", exercises: [] };
+  if (week <= 6) {
+    push.exercises = [
+      { name: "ディップス", detail: () => "4セット × 8〜12回(できればリュック加重)", note: "深く下ろして胸で押す。ベンチ下部の強化" },
+      { name: "プッシュアップ", detail: () => "3セット × 限界まで", note: "最後の追い込み。合計50回以上を目標" },
+      { name: "パイクプッシュアップ", detail: () => "3セット × 10回", note: "肩の押す力" }
+    ];
+  } else if (week <= 12) {
+    push.exercises = [
+      { name: "加重ディップス", detail: () => "5セット × 5〜8回(リュックに重り)", note: "重さ優先。フォームが崩れない範囲で毎週+重量" },
+      { name: "スロープッシュアップ(3秒下ろし)", detail: () => "3セット × 12回", note: "コントロール強化" }
+    ];
+  } else if (week <= 16) {
+    push.exercises = [
+      { name: "ディップス", detail: () => "3セット × 8回(自重)", note: "ピーキング中は自宅は軽め。疲労を持ち越さない" }
+    ];
+  } else {
+    push.exercises = [
+      { name: "完全休養 or 散歩", detail: () => "—", note: "挑戦前は回復がトレーニング" }
+    ];
+  }
+  if (week <= 12) {
+    pull.exercises = [
+      { name: "懸垂", detail: () => "5セットで合計25〜30回", note: "肩甲骨を寄せて下ろしきる。ベンチの土台" },
+      { name: "ナローチンニング", detail: () => "3セット × 8回", note: "二頭と広背部" },
+      { name: "ぶら下がり肩甲骨引き", detail: () => "2セット × 15回", note: "アーチを作る肩甲骨の動き" }
+    ];
+  } else if (week <= 16) {
+    pull.exercises = [
+      { name: "懸垂", detail: () => "3セット × 6〜8回", note: "維持でOK" }
+    ];
+  } else {
+    pull.exercises = [{ name: "休養", detail: () => "—", note: "睡眠を最優先" }];
+  }
+  return { push, pull };
+}
+
+/* 週番号(1〜18)。開始前は0、終了後は19 */
+function weekOf(dateISO) {
+  if (!S.profile) return 0;
+  const diff = Math.floor((parseISO(dateISO) - parseISO(S.profile.startDate)) / DAY);
+  if (diff < 0) return 0;
+  return Math.min(19, Math.floor(diff / 7) + 1);
+}
+
+/* その日のセッションを決定 */
+function sessionFor(dateISO) {
+  const wk = weekOf(dateISO);
+  if (wk === 0) return { type: "pre", title: "プログラム開始前", week: 0 };
+  if (wk === 19) return { type: "post", title: "プログラム終了", week: 19 };
+  const d = parseISO(dateISO).getDay();
+  const benchDay = S.profile.benchDay;
+  const { push, pull } = homeSessions(wk);
+  // 自宅日はベンチ日の2日後(プッシュ)と4日後(プル)を基本に配置
+  const pushDay = (benchDay + 2) % 7, pullDay = (benchDay + 4) % 7;
+  if (d === benchDay) return buildBenchSession(wk, dateISO);
+  if (d === pushDay) return { ...push, week: wk };
+  if (d === pullDay) return { ...pull, week: wk };
+  return { type: "rest", title: "休養日", week: wk };
+}
+
+function currentTM() {
+  if (!S.profile) return 105;
+  return S.profile.tm;
+}
+
+function buildBenchSession(wk, dateISO) {
+  const plan = WEEK_PLAN[wk];
+  const tm = currentTM();
+  const pct = p => round25(tm * p);
+  if (plan.test) {
+    const goal = S.profile.goal;
+    const warm = [
+      { name: "ウォームアップ", detail: () => `バー×10 → 60×5 → 80×3 → ${round25(goal*.76)}×2 → ${round25(goal*.84)}×1 → ${round25(goal*.92)}×1`, note: "各セット間3〜5分。温存が全て" },
+      { name: `🏆 第1試技`, detail: () => `${round25(goal*.97)}kg × 1回`, note: "確実に獲る重量" },
+      { name: `🏆 第2試技`, detail: () => `${goal}kg × 1回`, note: "これが本番。脚で踏んで、胸で受けて、爆発" }
+    ];
+    return { type: "test", title: "125kg 挑戦の日", week: wk, exercises: warm, plan };
+  }
+  const ex = [];
+  ex.push({
+    name: "ベンチプレス トップセット", key: "top",
+    detail: () => `${plan.top.sets}セット × ${plan.top.reps}回 @ ${pct(plan.top.pct)}kg`,
+    weight: pct(plan.top.pct), reps: plan.top.reps, sets: plan.top.sets,
+    note: plan.amrap ? "最終セットは余力2回残しで限界チャレンジOK(記録更新のチャンス)" : "全レップ、尻をベンチにつけたまま。脚で床を踏む"
+  });
+  ex.push({
+    name: "ベンチプレス バックオフ", key: "back",
+    detail: () => `${plan.back.sets}セット × ${plan.back.reps}回 @ ${pct(plan.back.pct)}kg`,
+    weight: pct(plan.back.pct), reps: plan.back.reps, sets: plan.back.sets,
+    note: "ボリュームの主役。丁寧に同じフォームで"
+  });
+  accessories(wk).forEach(a => ex.push({ name: a.name, detail: () => a.detail(pct), note: a.note }));
+  return { type: "bench", title: `ベンチプレスの日 — 第${wk}週`, week: wk, exercises: ex, plan };
+}
+
+/* ================================================================
+   コンディションエンジン
+   Oura(レディネス/睡眠/HRV/RHR) + Fitbit(HRV/RHR/睡眠) + 主観
+================================================================ */
+function hrvBaseline() {
+  const vals = Object.values(S.condition).map(c => c.hrv).filter(v => v > 0).slice(-14);
+  if (!vals.length) return null;
+  return vals.reduce((a,b)=>a+b,0) / vals.length;
+}
+function rhrBaseline() {
+  const vals = Object.values(S.condition).map(c => c.rhr).filter(v => v > 0).slice(-14);
+  if (!vals.length) return null;
+  return vals.reduce((a,b)=>a+b,0) / vals.length;
+}
+
+function computeScore(c) {
+  const parts = [];
+  if (c.readiness > 0) parts.push({ v: c.readiness, w: 3 });
+  if (c.sleepScore > 0) parts.push({ v: c.sleepScore, w: 2 });
+  const hb = hrvBaseline(), rb = rhrBaseline();
+  if (c.hrv > 0 && hb) {
+    const ratio = c.hrv / hb; // 1.0 = baseline
+    parts.push({ v: Math.max(0, Math.min(100, 50 + (ratio - 1) * 250)), w: 2 });
+  }
+  if (c.rhr > 0 && rb) {
+    const diff = c.rhr - rb; // 高い=悪い
+    parts.push({ v: Math.max(0, Math.min(100, 70 - diff * 8)), w: 1.5 });
+  }
+  if (c.subjective > 0) parts.push({ v: c.subjective, w: 1.5 });
+  if (!parts.length) return null;
+  const total = parts.reduce((a,p)=>a+p.v*p.w,0) / parts.reduce((a,p)=>a+p.w,0);
+  return Math.round(total);
+}
+
+/* スコア → 調整 */
+function adjustment(score) {
+  if (score === null || score === undefined) return { zone: "none", label: "データなし", color: "var(--text-muted)", icon: "–", pct: 0, setDelta: 0 };
+  if (score >= 85) return { zone: "peak", label: "絶好調", color: "var(--status-good)", icon: "▲", pct: +0.02, setDelta: 0 };
+  if (score >= 70) return { zone: "good", label: "良好", color: "var(--status-good)", icon: "✓", pct: 0, setDelta: 0 };
+  if (score >= 55) return { zone: "caution", label: "やや疲労", color: "var(--status-warning)", icon: "◆", pct: -0.05, setDelta: -1 };
+  return { zone: "low", label: "要回復", color: "var(--status-critical)", icon: "■", pct: -0.125, setDelta: -2 };
+}
+
+/* コーチのメッセージ生成 */
+function coachMessage(session, cond, adj) {
+  const wk = session.week;
+  const blk = blockOf(Math.max(1, Math.min(18, wk)));
+  const msgs = [];
+  if (session.type === "test") {
+    msgs.push("<strong>ついにこの日が来た。</strong>18週間の積み上げは裏切らない。ウォームアップは短く鋭く、本番の1発に全てを置いてこよう。");
+    if (adj.zone === "low" || adj.zone === "caution") msgs.push("ただしコンディションが万全じゃない。挑戦日を2〜3日ずらす勇気も強さだ。");
+    return msgs;
+  }
+  if (session.type === "bench") {
+    if (adj.zone === "peak") msgs.push(`<strong>今日は攻める日だ。</strong>回復データが最高レベル。トップセットは<strong>+2.5kg</strong>上乗せした重量を提案してある。獲りにいこう。`);
+    else if (adj.zone === "good") msgs.push(`コンディション良好。<strong>プログラム通り</strong>でいこう。今日の仕事は${WEEK_PLAN[wk] ? WEEK_PLAN[wk].label : ""}。`);
+    else if (adj.zone === "caution") msgs.push(`回復が追いついていない。今日は<strong>重量を5%下げ、セットを1つ減らした</strong>。軽い日に丁寧に積むのが、結局いちばん強くなる。`);
+    else if (adj.zone === "low") msgs.push(`<strong>今日は無理をしない日。</strong>重量を12.5%落としてフォーム練習に切り替えた。それでもキツければ完全休養に。1回のワークアウトより18週間の継続が125kgを作る。`);
+    else msgs.push(`朝のコンディションを入力(または同期)すると、今日の重量を自動調整するよ。`);
+    if (blk) msgs.push(`現在は<strong>${blk.name}</strong>(${blk.desc})。第${wk}週/18週。`);
+  }
+  if (session.type === "home-push") msgs.push("ジムの日じゃなくても差は作れる。ディップスはベンチ下部の最強の相棒だ。深く、コントロールして。");
+  if (session.type === "home-pull") msgs.push("押す力は引く力の上に乗る。今日の懸垂が、ベンチのアーチと安定を作る。");
+  if (session.type === "rest") {
+    if (adj.zone === "low") msgs.push("休むのも仕事のうち。今日はしっかり食べて寝よう。筋肉はジムじゃなく布団の中で強くなる。");
+    else msgs.push("今日は休養日。タンパク質は体重×2g、睡眠7時間以上。それが次のベンチの重量になる。");
+  }
+  const hb = hrvBaseline();
+  if (cond && cond.hrv > 0 && hb && cond.hrv < hb * 0.85) msgs.push(`⚠️ HRVが14日平均より15%以上低い(${Math.round(cond.hrv)}ms / 平均${Math.round(hb)}ms)。飲酒・寝不足・ストレスに心当たりは?`);
+  return msgs;
+}
+
+/* ================================================================
+   デバイス連携 — Oura API v2 / Fitbit Web API
+================================================================ */
+async function syncOura() {
+  const token = S.tokens.oura.trim();
+  if (!token) throw new Error("Ouraトークンが未設定です");
+  const end = todayISO();
+  const start = fmtISO(new Date(Date.now() - 20 * DAY));
+  const H = { headers: { "Authorization": "Bearer " + token } };
+  const get = async (path) => {
+    const r = await fetch(`https://api.ouraring.com/v2/usercollection/${path}?start_date=${start}&end_date=${end}`, H);
+    if (r.status === 401) throw new Error("Ouraトークンが無効です(期限切れの可能性)");
+    if (!r.ok) throw new Error("Oura APIエラー: " + r.status);
+    return (await r.json()).data || [];
+  };
+  const [readiness, sleep] = await Promise.all([get("daily_readiness"), get("daily_sleep")]);
+  let count = 0;
+  readiness.forEach(rec => {
+    const day = rec.day;
+    const c = S.condition[day] || {};
+    c.readiness = rec.score || c.readiness || 0;
+    if (rec.contributors) {
+      if (rec.contributors.hrv_balance) c.hrvBalance = rec.contributors.hrv_balance;
+      if (rec.contributors.resting_heart_rate) c.rhrContrib = rec.contributors.resting_heart_rate;
+    }
+    c.src = (c.src || "") .includes("oura") ? c.src : ((c.src ? c.src + "+" : "") + "oura");
+    S.condition[day] = c; count++;
+  });
+  sleep.forEach(rec => {
+    const day = rec.day;
+    const c = S.condition[day] || {};
+    c.sleepScore = rec.score || c.sleepScore || 0;
+    S.condition[day] = c;
+  });
+  // 各日のスコア再計算
+  Object.keys(S.condition).forEach(d => { S.condition[d].score = computeScore(S.condition[d]); });
+  save();
+  return count;
+}
+
+async function syncFitbit() {
+  const token = S.tokens.fitbit.trim();
+  if (!token) throw new Error("Fitbitトークンが未設定です");
+  const H = { headers: { "Authorization": "Bearer " + token } };
+  const today = todayISO();
+  const start = fmtISO(new Date(Date.now() - 14 * DAY));
+  const get = async (url) => {
+    const r = await fetch(url, H);
+    if (r.status === 401) throw new Error("Fitbitトークンが無効です(8時間で失効します。再取得を)");
+    if (!r.ok) throw new Error("Fitbit APIエラー: " + r.status);
+    return r.json();
+  };
+  const [hrv, hr] = await Promise.all([
+    get(`https://api.fitbit.com/1/user/-/hrv/date/${start}/${today}.json`),
+    get(`https://api.fitbit.com/1/user/-/activities/heart/date/${start}/${today}.json`)
+  ]);
+  let count = 0;
+  (hrv.hrv || []).forEach(rec => {
+    const day = rec.dateTime;
+    const c = S.condition[day] || {};
+    c.hrv = rec.value && rec.value.dailyRmssd ? rec.value.dailyRmssd : c.hrv || 0;
+    c.src = (c.src || "").includes("fitbit") ? c.src : ((c.src ? c.src + "+" : "") + "fitbit");
+    S.condition[day] = c; count++;
+  });
+  (hr["activities-heart"] || []).forEach(rec => {
+    const day = rec.dateTime;
+    const v = rec.value && rec.value.restingHeartRate;
+    if (v) {
+      const c = S.condition[day] || {};
+      c.rhr = v;
+      S.condition[day] = c;
+    }
+  });
+  Object.keys(S.condition).forEach(d => { S.condition[d].score = computeScore(S.condition[d]); });
+  save();
+  return count;
+}
+
+/* ================================================================
+   チャート (SVG手描き / dataviz仕様)
+   線2px・マーカー8px+サーフェスリング2px・グリッドはヘアライン実線
+================================================================ */
+const CHART = {
+  ink: "#ffffff", sub: "#c3c2b7", muted: "#898781",
+  grid: "#2c2c2a", baseline: "#383835", surface: "#1a1a19",
+  s1: "#3987e5", wash: "rgba(57,135,229,0.10)"
+};
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* 汎用ラインチャート: pts=[{x:dateISO,y:num}], opts={target, yLabel, unit} */
+function lineChart(container, pts, opts = {}) {
+  container.innerHTML = "";
+  if (pts.length < 2) {
+    container.innerHTML = `<p class="muted" style="padding:12px 0">データが2件以上たまるとグラフが表示されます。</p>`;
+    return;
+  }
+  const W = 520, Hpx = 220, pad = { l: 40, r: 14, t: 14, b: 26 };
+  const xs = pts.map(p => parseISO(p.x).getTime());
+  const ys = pts.map(p => p.y);
+  let ymin = Math.min(...ys), ymax = Math.max(...ys);
+  if (opts.target) { ymax = Math.max(ymax, opts.target); }
+  const span = Math.max(1, ymax - ymin);
+  ymin = Math.floor((ymin - span * 0.15)); ymax = Math.ceil((ymax + span * 0.15));
+  if (opts.min0) ymin = Math.max(0, ymin);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const X = t => pad.l + (t - x0) / Math.max(1, x1 - x0) * (W - pad.l - pad.r);
+  const Y = v => pad.t + (1 - (v - ymin) / (ymax - ymin)) * (Hpx - pad.t - pad.b);
+  // y ticks: 4 clean steps
+  const step = niceStep((ymax - ymin) / 4);
+  let ticks = [];
+  for (let v = Math.ceil(ymin / step) * step; v <= ymax; v += step) ticks.push(v);
+  let svg = `<svg viewBox="0 0 ${W} ${Hpx}" role="img" aria-label="${esc(opts.label||"チャート")}">`;
+  ticks.forEach(v => {
+    svg += `<line x1="${pad.l}" y1="${Y(v)}" x2="${W-pad.r}" y2="${Y(v)}" stroke="${CHART.grid}" stroke-width="1"/>`;
+    svg += `<text x="${pad.l-6}" y="${Y(v)+3.5}" text-anchor="end" font-size="10" fill="${CHART.muted}" font-variant-numeric="tabular-nums">${v}</text>`;
+  });
+  svg += `<line x1="${pad.l}" y1="${Hpx-pad.b}" x2="${W-pad.r}" y2="${Hpx-pad.b}" stroke="${CHART.baseline}" stroke-width="1"/>`;
+  // x labels: first, middle, last
+  [0, Math.floor(pts.length/2), pts.length-1].forEach(i => {
+    const p = pts[i];
+    svg += `<text x="${X(parseISO(p.x).getTime())}" y="${Hpx-8}" text-anchor="middle" font-size="10" fill="${CHART.muted}">${fmtJP(p.x)}</text>`;
+  });
+  // target reference line
+  if (opts.target) {
+    svg += `<line x1="${pad.l}" y1="${Y(opts.target)}" x2="${W-pad.r}" y2="${Y(opts.target)}" stroke="${CHART.sub}" stroke-width="1"/>`;
+    svg += `<text x="${W-pad.r}" y="${Y(opts.target)-5}" text-anchor="end" font-size="10" font-weight="600" fill="${CHART.sub}">目標 ${opts.target}${opts.unit||""}</text>`;
+  }
+  // area wash + line
+  const path = pts.map((p,i) => `${i?"L":"M"}${X(parseISO(p.x).getTime()).toFixed(1)},${Y(p.y).toFixed(1)}`).join(" ");
+  svg += `<path d="${path} L${X(x1).toFixed(1)},${Hpx-pad.b} L${X(x0).toFixed(1)},${Hpx-pad.b} Z" fill="${CHART.wash}" stroke="none"/>`;
+  svg += `<path d="${path}" fill="none" stroke="${CHART.s1}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  // markers: ring 2px in surface color
+  pts.forEach(p => {
+    svg += `<circle cx="${X(parseISO(p.x).getTime())}" cy="${Y(p.y)}" r="6" fill="${CHART.surface}"/>`;
+    svg += `<circle cx="${X(parseISO(p.x).getTime())}" cy="${Y(p.y)}" r="4" fill="${CHART.s1}"/>`;
+  });
+  // end label (selective direct label)
+  const last = pts[pts.length-1];
+  svg += `<text x="${Math.min(W-pad.r, X(parseISO(last.x).getTime()))}" y="${Y(last.y)-10}" text-anchor="end" font-size="11" font-weight="700" fill="${CHART.ink}">${last.y}${opts.unit||""}</text>`;
+  // crosshair placeholder
+  svg += `<line id="xh" x1="0" y1="${pad.t}" x2="0" y2="${Hpx-pad.b}" stroke="${CHART.sub}" stroke-width="1" style="display:none"/>`;
+  svg += `</svg>`;
+  container.innerHTML = svg + `<div class="viz-tooltip"></div>`;
+  attachCrosshair(container, pts, X, Y, opts);
+}
+function niceStep(raw) {
+  const mag = Math.pow(10, Math.floor(Math.log10(Math.max(0.1, raw))));
+  for (const m of [1, 2, 2.5, 5, 10]) if (raw <= m * mag) return m * mag;
+  return 10 * mag;
+}
+function attachCrosshair(container, pts, X, Y, opts) {
+  const svg = container.querySelector("svg");
+  const xh = svg.querySelector("#xh");
+  const tt = container.querySelector(".viz-tooltip");
+  const move = ev => {
+    const rect = svg.getBoundingClientRect();
+    const clientX = (ev.touches ? ev.touches[0].clientX : ev.clientX);
+    const px = (clientX - rect.left) / rect.width * 520;
+    let best = 0, bd = 1e9;
+    pts.forEach((p,i) => { const d = Math.abs(X(parseISO(p.x).getTime()) - px); if (d < bd) { bd = d; best = i; } });
+    const p = pts[best];
+    const sx = X(parseISO(p.x).getTime());
+    xh.setAttribute("x1", sx); xh.setAttribute("x2", sx); xh.style.display = "block";
+    tt.style.display = "block";
+    tt.innerHTML = "";
+    const dd = document.createElement("div"); dd.className = "tt-date"; dd.textContent = fmtJP(p.x); tt.appendChild(dd);
+    const row = document.createElement("div"); row.className = "tt-row";
+    const key = document.createElement("span"); key.className = "tt-key"; key.style.background = CHART.s1;
+    const val = document.createElement("span"); val.className = "tt-val"; val.textContent = p.y + (opts.unit || "");
+    const nm = document.createElement("span"); nm.className = "tt-name"; nm.textContent = opts.seriesName || "";
+    row.appendChild(key); row.appendChild(val); row.appendChild(nm); tt.appendChild(row);
+    const ttw = tt.offsetWidth || 120;
+    let left = sx / 520 * rect.width - ttw / 2;
+    left = Math.max(4, Math.min(rect.width - ttw - 4, left));
+    tt.style.left = left + "px"; tt.style.top = "6px";
+  };
+  const out = () => { xh.style.display = "none"; tt.style.display = "none"; };
+  svg.addEventListener("pointermove", move);
+  svg.addEventListener("touchstart", move, { passive: true });
+  svg.addEventListener("touchmove", move, { passive: true });
+  svg.addEventListener("pointerleave", out);
+}
+
+/* 棒チャート: pts=[{x:label,y:num}] */
+function barChart(container, pts, opts = {}) {
+  container.innerHTML = "";
+  if (!pts.length) { container.innerHTML = `<p class="muted" style="padding:12px 0">記録がたまると表示されます。</p>`; return; }
+  const W = 520, Hpx = 200, pad = { l: 40, r: 10, t: 14, b: 26 };
+  const ymax = Math.max(...pts.map(p=>p.y)) * 1.15 || 10;
+  const bw = Math.min(24, (W - pad.l - pad.r) / pts.length - 4);
+  const X = i => pad.l + (i + 0.5) * ((W - pad.l - pad.r) / pts.length);
+  const Y = v => pad.t + (1 - v / ymax) * (Hpx - pad.t - pad.b);
+  const step = niceStep(ymax / 4);
+  let svg = `<svg viewBox="0 0 ${W} ${Hpx}" role="img" aria-label="${esc(opts.label||"棒グラフ")}">`;
+  for (let v = step; v <= ymax; v += step) {
+    svg += `<line x1="${pad.l}" y1="${Y(v)}" x2="${W-pad.r}" y2="${Y(v)}" stroke="${CHART.grid}" stroke-width="1"/>`;
+    svg += `<text x="${pad.l-6}" y="${Y(v)+3.5}" text-anchor="end" font-size="10" fill="${CHART.muted}" font-variant-numeric="tabular-nums">${Math.round(v)}</text>`;
+  }
+  svg += `<line x1="${pad.l}" y1="${Hpx-pad.b}" x2="${W-pad.r}" y2="${Hpx-pad.b}" stroke="${CHART.baseline}" stroke-width="1"/>`;
+  pts.forEach((p, i) => {
+    const x = X(i) - bw/2, y = Y(p.y), h = Hpx - pad.b - y;
+    if (h > 0) svg += `<path d="M${x},${Hpx-pad.b} L${x},${y+4} Q${x},${y} ${x+4},${y} L${x+bw-4},${y} Q${x+bw},${y} ${x+bw},${y+4} L${x+bw},${Hpx-pad.b} Z" fill="${CHART.s1}" data-i="${i}"/>`;
+    svg += `<text x="${X(i)}" y="${Hpx-8}" text-anchor="middle" font-size="9.5" fill="${CHART.muted}">${esc(p.x)}</text>`;
+  });
+  const mx = pts.reduce((a,p,i) => p.y > pts[a].y ? i : a, 0);
+  if (pts[mx].y > 0) svg += `<text x="${X(mx)}" y="${Y(pts[mx].y)-6}" text-anchor="middle" font-size="11" font-weight="700" fill="${CHART.ink}">${Math.round(pts[mx].y)}</text>`;
+  svg += `</svg>`;
+  container.innerHTML = svg + `<div class="viz-tooltip"></div>`;
+  const tt = container.querySelector(".viz-tooltip");
+  const svgEl = container.querySelector("svg");
+  svgEl.addEventListener("pointermove", ev => {
+    const rect = svgEl.getBoundingClientRect();
+    const px = (ev.clientX - rect.left) / rect.width * 520;
+    let i = Math.floor((px - pad.l) / ((W - pad.l - pad.r) / pts.length));
+    i = Math.max(0, Math.min(pts.length - 1, i));
+    const p = pts[i];
+    tt.style.display = "block"; tt.innerHTML = "";
+    const dd = document.createElement("div"); dd.className = "tt-date"; dd.textContent = p.x; tt.appendChild(dd);
+    const row = document.createElement("div"); row.className = "tt-row";
+    const val = document.createElement("span"); val.className = "tt-val"; val.textContent = Math.round(p.y) + (opts.unit || "");
+    row.appendChild(val); tt.appendChild(row);
+    let left = X(i) / 520 * rect.width - 55;
+    left = Math.max(4, Math.min(rect.width - 114, left));
+    tt.style.left = left + "px"; tt.style.top = "4px";
+  });
+  svgEl.addEventListener("pointerleave", () => { tt.style.display = "none"; });
+}
+
+/* ================================================================
+   画面レンダリング
+================================================================ */
+const $ = s => document.querySelector(s);
+
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+}
+
+/* ---- 今日 ---- */
+function renderToday() {
+  const root = $("#screen-today");
+  root.innerHTML = "";
+  const t = todayISO();
+  const cond = S.condition[t];
+  const score = cond ? cond.score : null;
+  const adj = adjustment(score);
+  const session = sessionFor(t);
+
+  /* コンディションカード */
+  const condCard = el("div", "card");
+  condCard.innerHTML = `<h2>今日のコンディション</h2>`;
+  const badgeWrap = el("div", "", "");
+  badgeWrap.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap";
+  const badge = el("span", "cond-badge");
+  badge.innerHTML = `<span class="dot" style="background:${adj.color}"></span>${adj.icon} ${adj.label}${score !== null ? ` <span style="font-weight:800">${score}</span>` : ""}`;
+  badgeWrap.appendChild(badge);
+  const syncBtn = el("button", "btn small secondary", "⟳ デバイス同期");
+  syncBtn.style.width = "auto";
+  syncBtn.onclick = () => doSyncAll(syncBtn);
+  badgeWrap.appendChild(syncBtn);
+  condCard.appendChild(badgeWrap);
+  if (cond) {
+    const rows = [];
+    if (cond.readiness) rows.push(`Ouraレディネス <b>${cond.readiness}</b>`);
+    if (cond.sleepScore) rows.push(`睡眠 <b>${cond.sleepScore}</b>`);
+    if (cond.hrv) rows.push(`HRV <b>${Math.round(cond.hrv)}ms</b>`);
+    if (cond.rhr) rows.push(`安静時心拍 <b>${cond.rhr}</b>`);
+    if (cond.subjective) rows.push(`主観 <b>${cond.subjective}</b>`);
+    if (rows.length) condCard.appendChild(el("p", "muted", rows.join(" ・ ") + `<span style="opacity:.7">(${cond.src || "手入力"})</span>`));
+  }
+  const manualBtn = el("button", "toggle-table", cond ? "コンディションを手入力で修正する" : "コンディションを手入力する");
+  manualBtn.onclick = () => toggleManualCond(condCard, t);
+  condCard.appendChild(manualBtn);
+  root.appendChild(condCard);
+
+  /* コーチカード */
+  const coach = el("div", "card coach-card");
+  coach.innerHTML = `<h2>コーチから</h2>`;
+  coachMessage(session, cond, adj).forEach(m => coach.appendChild(el("p", "", m)));
+  root.appendChild(coach);
+
+  /* ワークアウトカード */
+  const wo = el("div", "card");
+  const wk = session.week;
+  wo.innerHTML = `<h2>${esc(session.title)} <span class="sub">${session.type === "rest" || session.type === "pre" || session.type === "post" ? "" : "第" + wk + "週 / 18週"}</span></h2>`;
+  if (session.type === "pre") {
+    wo.appendChild(el("p", "muted", `プログラムは ${fmtJP(S.profile.startDate)} に始まります。それまでは普段どおりでOK。開始日を変えたい場合は「連携」タブから。`));
+  } else if (session.type === "rest") {
+    wo.appendChild(el("p", "muted", "トレーニングはなし。回復に全振りする日。"));
+  } else if (session.type === "post") {
+    wo.appendChild(el("p", "muted", "18週間おつかれさま!新しい目標で再スタートするには「連携」タブ→リセットから。"));
+  } else if (session.exercises) {
+    session.exercises.forEach((ex, idx) => {
+      const exEl = el("div", "exercise");
+      let weightNote = "";
+      let shownDetail = ex.detail();
+      if (ex.weight && adj.pct !== 0 && (session.type === "bench")) {
+        const newW = round25(ex.weight * (1 + adj.pct));
+        let sets = ex.sets;
+        if (ex.key === "back" && adj.setDelta) sets = Math.max(1, ex.sets + adj.setDelta);
+        shownDetail = `${sets}セット × ${ex.reps}回 @ <b style="color:${adj.color}">${newW}kg</b>`;
+        weightNote = `<span style="color:${adj.color}">コーチ調整: ${ex.weight}kg → ${newW}kg (${adj.pct>0?"+":""}${Math.round(adj.pct*100)}%${ex.key==="back"&&adj.setDelta? "・セット" + adj.setDelta : ""})</span>`;
+      }
+      exEl.innerHTML = `
+        <div class="ex-head"><span class="ex-name">${esc(ex.name)}</span><span class="ex-target">${shownDetail}</span></div>
+        ${weightNote ? `<div class="ex-adj">${weightNote}</div>` : ""}
+        ${ex.note ? `<div class="ex-note">${esc(ex.note)}</div>` : ""}`;
+      // set completion chips
+      const nSets = ex.sets ? (ex.key === "back" && adj.setDelta ? Math.max(1, ex.sets + adj.setDelta) : ex.sets) : null;
+      if (nSets) {
+        const row = el("div", "set-row");
+        const log = S.logs[t] || { sets: {} };
+        const doneArr = (log.sets && log.sets[idx]) || [];
+        for (let i = 0; i < nSets; i++) {
+          const chip = el("button", "set-chip" + (doneArr[i] ? " done" : ""), doneArr[i] ? "✓" : (i+1) + "");
+          chip.onclick = () => {
+            const L = S.logs[t] || { sets: {} };
+            L.sets = L.sets || {};
+            L.sets[idx] = L.sets[idx] || [];
+            L.sets[idx][i] = !L.sets[idx][i];
+            S.logs[t] = L; save(); renderToday();
+          };
+          row.appendChild(chip);
+        }
+        exEl.appendChild(row);
+      }
+      wo.appendChild(exEl);
+    });
+    /* トップセット実績の記録 */
+    if (session.type === "bench" || session.type === "test") {
+      const div = el("div", "divider");
+      wo.appendChild(div);
+      const log = S.logs[t] || {};
+      const recWrap = el("div");
+      recWrap.innerHTML = `<h2>今日のベスト記録 <span class="sub">重量×回数を入れると推定MAXを更新</span></h2>`;
+      const grid = el("div", "btn-row");
+      const wIn = document.createElement("input");
+      wIn.type = "number"; wIn.step = "2.5"; wIn.placeholder = "重量kg"; wIn.inputMode = "decimal";
+      wIn.value = log.topWeight || "";
+      const rIn = document.createElement("input");
+      rIn.type = "number"; rIn.step = "1"; rIn.placeholder = "回数"; rIn.inputMode = "numeric";
+      rIn.value = log.topReps || "";
+      const btn = el("button", "btn small", "記録");
+      btn.style.flex = "0 0 auto";
+      btn.onclick = () => {
+        const w = parseFloat(wIn.value), r = parseInt(rIn.value);
+        if (!w || !r) return;
+        const L = S.logs[t] || { sets: {} };
+        L.topWeight = w; L.topReps = r; L.e1rm = Math.round(epley(w, r) * 10) / 10;
+        S.logs[t] = L;
+        // TM自動更新提案: e1RMの97%がTMを上回ったら更新
+        const suggested = round25(L.e1rm * 0.97);
+        if (suggested > S.profile.tm) {
+          S.profile.tm = suggested;
+          alert(`💪 推定MAX ${L.e1rm}kg!\nトレーニングマックスを ${suggested}kg に更新した。来週から重量が上がるぞ。`);
+        }
+        save(); renderToday();
+      };
+      grid.appendChild(wIn); grid.appendChild(rIn); grid.appendChild(btn);
+      recWrap.appendChild(grid);
+      if (log.e1rm) recWrap.appendChild(el("p", "small-note", `本日の推定1RM: <b>${log.e1rm}kg</b> ${log.e1rm >= S.profile.goal ? "🎉 目標到達レベル!" : `(目標まであと ${Math.max(0, Math.round((S.profile.goal - log.e1rm)*10)/10)}kg)`}`));
+      wo.appendChild(recWrap);
+    }
+  }
+  root.appendChild(wo);
+}
+
+function toggleManualCond(card, dateISO) {
+  if (card.querySelector(".manual-cond")) { card.querySelector(".manual-cond").remove(); return; }
+  const c = S.condition[dateISO] || {};
+  const f = el("div", "manual-cond");
+  f.style.marginTop = "10px";
+  f.innerHTML = `
+    <label class="field"><span class="fl">Ouraレディネススコア (0-100)</span><input type="number" id="mc-readiness" min="0" max="100" inputmode="numeric" value="${c.readiness||""}" placeholder="Ouraアプリの数字"></label>
+    <label class="field"><span class="fl">睡眠スコア (0-100)</span><input type="number" id="mc-sleep" min="0" max="100" inputmode="numeric" value="${c.sleepScore||""}" placeholder="OuraまたはFitbitの数字"></label>
+    <label class="field"><span class="fl">HRV (ms) — Pixel Watch/Oura</span><input type="number" id="mc-hrv" min="0" max="200" inputmode="numeric" value="${c.hrv?Math.round(c.hrv):""}" placeholder="例: 45"></label>
+    <label class="field"><span class="fl">安静時心拍 (bpm)</span><input type="number" id="mc-rhr" min="30" max="120" inputmode="numeric" value="${c.rhr||""}" placeholder="例: 55"></label>
+    <label class="field"><span class="fl">今日の主観的な調子: <span class="range-val" id="mc-subj-val">${c.subjective||70}</span></span>
+      <input type="range" id="mc-subj" min="0" max="100" step="5" value="${c.subjective||70}"></label>
+    <button class="btn" id="mc-save">保存してコーチに反映</button>`;
+  card.appendChild(f);
+  f.querySelector("#mc-subj").oninput = e => { f.querySelector("#mc-subj-val").textContent = e.target.value; };
+  f.querySelector("#mc-save").onclick = () => {
+    const g = id => parseFloat(f.querySelector(id).value) || 0;
+    const nc = S.condition[dateISO] || {};
+    nc.readiness = g("#mc-readiness"); nc.sleepScore = g("#mc-sleep");
+    nc.hrv = g("#mc-hrv"); nc.rhr = g("#mc-rhr");
+    nc.subjective = parseFloat(f.querySelector("#mc-subj").value);
+    nc.src = nc.src && nc.src !== "手入力" ? nc.src : "手入力";
+    nc.score = computeScore(nc);
+    S.condition[dateISO] = nc; save(); renderToday();
+  };
+}
+
+async function doSyncAll(btn) {
+  btn.disabled = true; btn.textContent = "同期中…";
+  const results = [];
+  if (S.tokens.oura) { try { const n = await syncOura(); results.push(`Oura ✓ ${n}日分`); } catch(e){ results.push("Oura ✗ " + e.message); } }
+  if (S.tokens.fitbit) { try { const n = await syncFitbit(); results.push(`Fitbit ✓ ${n}日分`); } catch(e){ results.push("Fitbit ✗ " + e.message); } }
+  if (!S.tokens.oura && !S.tokens.fitbit) results.push("トークン未設定 →「連携」タブで設定してください");
+  btn.disabled = false; btn.textContent = "⟳ デバイス同期";
+  alert(results.join("\n"));
+  renderToday();
+}
+
+/* ---- プログラム ---- */
+function renderProgram() {
+  const root = $("#screen-program");
+  root.innerHTML = "";
+  const tm = currentTM();
+  const curWk = weekOf(todayISO());
+
+  const head = el("div", "kpi-row");
+  head.innerHTML = `
+    <div class="tile"><div class="label">トレーニングマックス</div><div class="value">${tm}<small> kg</small></div><div class="delta">プログラムの基準重量</div></div>
+    <div class="tile"><div class="label">目標</div><div class="value">${S.profile.goal}<small> kg</small></div><div class="delta">${curWk >= 1 && curWk <= 18 ? `第${curWk}週 / 18週` : "開始前"}</div></div>`;
+  root.appendChild(head);
+
+  const card = el("div", "card");
+  card.innerHTML = `<h2>18週間ロードマップ <span class="sub">ベンチ日: ${WD[S.profile.benchDay]}曜</span></h2>`;
+  BLOCKS.forEach(b => {
+    card.appendChild(el("div", "block-head", `${b.name.toUpperCase()} — ${b.desc}`));
+    for (let w = b.range[0]; w <= b.range[1]; w++) {
+      const plan = WEEK_PLAN[w];
+      const row = el("div", "week-row" + (w === curWk ? " current" : ""));
+      const startD = fmtISO(new Date(parseISO(S.profile.startDate).getTime() + (w-1) * 7 * DAY));
+      const topW = plan.test ? "" : `トップ ${round25(tm * plan.top.pct)}kg`;
+      row.innerHTML = `
+        <span class="wk">W${w}</span>
+        <span class="wk-info"><span class="wk-name">${esc(plan.label)}</span><br><span class="wk-detail">${fmtJP(startD)}週 ${topW ? "・" + topW : ""}${plan.deload ? " ・回復週" : ""}</span></span>
+        <span class="wk-status">${w < curWk ? "✓" : w === curWk ? "▶" : ""}</span>`;
+      card.appendChild(row);
+    }
+  });
+  root.appendChild(card);
+
+  const note = el("div", "card coach-card");
+  note.innerHTML = `<h2>このプログラムの考え方</h2>
+    <p><strong>週1のベンチ+自宅の押し引き2日</strong>で組んである。ベンチ日はトップセット(その週のメインの仕事)とバックオフ(ボリューム)の2段構え。</p>
+    <p>重量は毎回のコンディションスコアで自動調整される。<strong>数字はあくまで提案</strong>——バーの速度が明らかに遅い日は自分でも下げてOK。逆に記録を入れると推定MAXからTMが自動で上がっていく。</p>
+    <p>4週・10週・17週は意図的に軽い回復週。<strong>飛ばさないこと。</strong>ここで超回復が起きる。</p>`;
+  root.appendChild(note);
+}
+
+/* ---- 進捗 ---- */
+function renderProgress() {
+  const root = $("#screen-progress");
+  root.innerHTML = "";
+
+  // e1RM series
+  const e1s = Object.entries(S.logs)
+    .filter(([d, l]) => l.e1rm)
+    .sort((a,b) => a[0] < b[0] ? -1 : 1)
+    .map(([d, l]) => ({ x: d, y: l.e1rm }));
+  const best = e1s.length ? Math.max(...e1s.map(p=>p.y)) : null;
+
+  const hero = el("div", "card hero");
+  hero.innerHTML = `<div class="label">推定1RM(ベスト)</div>
+    <div class="num">${best ? best : "—"}<small> kg / 目標 ${S.profile.goal}kg</small></div>
+    ${best ? `<div class="delta ${best >= S.profile.goal ? "up" : ""}" style="font-size:.8rem;color:var(--text-secondary)">${best >= S.profile.goal ? "🎉 目標重量に到達!" : `あと ${Math.round((S.profile.goal-best)*10)/10}kg`}</div>` : `<div class="delta" style="font-size:.8rem;color:var(--text-muted)">ベンチの日に記録を入れると表示されます</div>`}`;
+  root.appendChild(hero);
+
+  const c1 = el("div", "card");
+  c1.innerHTML = `<h2>推定1RMの推移</h2>`;
+  const w1 = el("div", "chart-wrap"); c1.appendChild(w1);
+  root.appendChild(c1);
+  lineChart(w1, e1s, { target: S.profile.goal, unit: "kg", seriesName: "推定1RM", label: "推定1RMの推移" });
+
+  // condition series (last 21 days)
+  const conds = Object.entries(S.condition)
+    .filter(([d,c]) => c.score !== null && c.score !== undefined)
+    .sort((a,b) => a[0] < b[0] ? -1 : 1).slice(-21)
+    .map(([d,c]) => ({ x: d, y: c.score }));
+  const c2 = el("div", "card");
+  c2.innerHTML = `<h2>コンディションスコア <span class="sub">直近3週間</span></h2>`;
+  const w2 = el("div", "chart-wrap"); c2.appendChild(w2);
+  root.appendChild(c2);
+  lineChart(w2, conds, { unit: "", min0: false, seriesName: "スコア", label: "コンディションスコアの推移" });
+
+  // weekly volume (bench sets completed × approx)
+  const volByWeek = {};
+  Object.entries(S.logs).forEach(([d, l]) => {
+    const wk = weekOf(d);
+    if (wk < 1 || wk > 18) return;
+    let sets = 0;
+    if (l.sets) Object.values(l.sets).forEach(arr => sets += arr.filter(Boolean).length);
+    volByWeek[wk] = (volByWeek[wk] || 0) + sets;
+  });
+  const vols = Object.keys(volByWeek).sort((a,b)=>a-b).map(w => ({ x: "W"+w, y: volByWeek[w] }));
+  const c3 = el("div", "card");
+  c3.innerHTML = `<h2>週ごとの完了セット数</h2>`;
+  const w3 = el("div", "chart-wrap"); c3.appendChild(w3);
+  root.appendChild(c3);
+  barChart(w3, vols, { unit: "セット", label: "週ごとの完了セット数" });
+
+  // table view (accessibility)
+  const c4 = el("div", "card");
+  const tbtn = el("button", "toggle-table", "▸ 記録をテーブルで見る");
+  const tbl = el("div"); tbl.style.display = "none";
+  tbtn.onclick = () => { const s = tbl.style.display === "none"; tbl.style.display = s ? "block" : "none"; tbtn.textContent = s ? "▾ テーブルを閉じる" : "▸ 記録をテーブルで見る"; };
+  let rows = Object.entries(S.logs).filter(([d,l]) => l.topWeight).sort((a,b)=> a[0] < b[0] ? 1 : -1)
+    .map(([d,l]) => `<tr><td>${fmtJP(d)}</td><td>${l.topWeight}kg × ${l.topReps}</td><td>${l.e1rm}kg</td><td>${S.condition[d] ? (S.condition[d].score ?? "—") : "—"}</td></tr>`).join("");
+  tbl.innerHTML = `<table class="table-view"><thead><tr><th>日付</th><th>ベスト</th><th>推定1RM</th><th>調子</th></tr></thead><tbody>${rows || `<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">まだ記録がありません</td></tr>`}</tbody></table>`;
+  c4.appendChild(tbtn); c4.appendChild(tbl);
+  root.appendChild(c4);
+}
+
+/* ---- 設定・連携 ---- */
+function renderSettings() {
+  const root = $("#screen-settings");
+  root.innerHTML = "";
+
+  const oura = el("div", "card");
+  oura.innerHTML = `<h2>💍 Oura Ring 4 連携</h2>
+    <label class="field"><span class="fl">Ouraアクセストークン</span>
+      <input type="password" id="tok-oura" placeholder="貼り付け" value="${esc(S.tokens.oura)}"></label>
+    <div class="btn-row"><button class="btn small secondary" id="save-oura">保存</button><button class="btn small" id="test-oura">接続テスト</button></div>
+    <div class="sync-status" id="st-oura"></div>
+    <details class="help"><summary>トークンの取り方(初回のみ・約3分)</summary>
+      <div class="help-body"><ol>
+        <li>PCまたはスマホのブラウザで <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noopener">cloud.ouraring.com/personal-access-tokens</a> を開いてログイン</li>
+        <li>「Create New Personal Access Token」を押す</li>
+        <li>表示された長い文字列をコピーして上の欄に貼り付け→保存</li>
+        <li>※このページが見つからない場合、Ouraは開発者ポータル(<a href="https://developer.ouraring.com" target="_blank" rel="noopener">developer.ouraring.com</a>)への移行中です。その場合はアプリ登録からトークンを発行してください</li>
+      </ol>トークンはこの端末のブラウザ内にだけ保存されます。</div></details>`;
+  root.appendChild(oura);
+
+  const fb = el("div", "card");
+  fb.innerHTML = `<h2>⌚ Pixel Watch 3 (Fitbit) 連携</h2>
+    <label class="field"><span class="fl">Fitbitアクセストークン</span>
+      <input type="password" id="tok-fitbit" placeholder="貼り付け" value="${esc(S.tokens.fitbit)}"></label>
+    <div class="btn-row"><button class="btn small secondary" id="save-fitbit">保存</button><button class="btn small" id="test-fitbit">接続テスト</button></div>
+    <div class="sync-status" id="st-fitbit"></div>
+    <details class="help"><summary>トークンの取り方(少し手間・約10分)</summary>
+      <div class="help-body"><ol>
+        <li><a href="https://dev.fitbit.com/apps" target="_blank" rel="noopener">dev.fitbit.com/apps</a> でログイン(Googleアカウント)→「Register a new app」</li>
+        <li>適当な名前を入れ、OAuth 2.0 Application Type は <b>Personal</b>、Redirect URL は <code>https://localhost</code> に</li>
+        <li>登録後、<a href="https://dev.fitbit.com/build/reference/web-api/troubleshooting-guide/oauth2-tutorial/" target="_blank" rel="noopener">OAuth 2.0 チュートリアルページ</a>で自分のアプリを選び、scope は heartrate / sleep / respiratory_rate にチェックしてトークンを生成</li>
+        <li>生成された Access Token を上に貼り付け→保存</li>
+        <li>⚠️ Fitbitのトークンは約8時間で失効します。失効したら同じページで再生成(2回目からは1分で終わります)。面倒な日はOuraだけでも十分機能します</li>
+      </ol></div></details>`;
+  root.appendChild(fb);
+
+  const prof = el("div", "card");
+  prof.innerHTML = `<h2>プロフィール・プログラム設定</h2>
+    <label class="field"><span class="fl">トレーニングマックス TM (kg)</span><input type="number" id="set-tm" step="2.5" value="${S.profile.tm}" inputmode="decimal"></label>
+    <label class="field"><span class="fl">目標 (kg)</span><input type="number" id="set-goal" step="2.5" value="${S.profile.goal}" inputmode="decimal"></label>
+    <label class="field"><span class="fl">ベンチの曜日</span><select id="set-day">${[1,2,3,4,5,6,0].map(d=>`<option value="${d}" ${S.profile.benchDay===d?"selected":""}>${WD[d]}曜日</option>`).join("")}</select></label>
+    <label class="field"><span class="fl">開始日</span><input type="date" id="set-start" value="${S.profile.startDate}"></label>
+    <button class="btn secondary" id="save-prof">設定を保存</button>`;
+  root.appendChild(prof);
+
+  const data = el("div", "card");
+  data.innerHTML = `<h2>データ管理</h2>
+    <div class="btn-row">
+      <button class="btn small secondary" id="btn-export">エクスポート</button>
+      <button class="btn small secondary" id="btn-import">インポート</button>
+      <button class="btn small secondary" id="btn-reset" style="color:var(--status-critical)">リセット</button>
+    </div>
+    <input type="file" id="import-file" accept=".json" style="display:none">
+    <p class="small-note">エクスポートは全記録のバックアップ(JSON)。機種変更やブラウザ変更の前に。</p>`;
+  root.appendChild(data);
+
+  /* handlers */
+  $("#save-oura").onclick = () => { S.tokens.oura = $("#tok-oura").value.trim(); save(); flash("#st-oura", "保存しました", true); };
+  $("#test-oura").onclick = async () => {
+    S.tokens.oura = $("#tok-oura").value.trim(); save();
+    flash("#st-oura", "接続中…", true);
+    try { const n = await syncOura(); flash("#st-oura", `✓ 接続成功!直近${n}日分のレディネスを取得`, true); }
+    catch(e){ flash("#st-oura", "✗ " + e.message, false); }
+  };
+  $("#save-fitbit").onclick = () => { S.tokens.fitbit = $("#tok-fitbit").value.trim(); save(); flash("#st-fitbit", "保存しました", true); };
+  $("#test-fitbit").onclick = async () => {
+    S.tokens.fitbit = $("#tok-fitbit").value.trim(); save();
+    flash("#st-fitbit", "接続中…", true);
+    try { const n = await syncFitbit(); flash("#st-fitbit", `✓ 接続成功!直近${n}日分のHRVを取得`, true); }
+    catch(e){ flash("#st-fitbit", "✗ " + e.message, false); }
+  };
+  $("#save-prof").onclick = () => {
+    S.profile.tm = parseFloat($("#set-tm").value) || S.profile.tm;
+    S.profile.goal = parseFloat($("#set-goal").value) || S.profile.goal;
+    S.profile.benchDay = parseInt($("#set-day").value);
+    S.profile.startDate = $("#set-start").value || S.profile.startDate;
+    save(); alert("保存しました"); renderAll();
+  };
+  $("#btn-export").onclick = () => {
+    const blob = new Blob([JSON.stringify(S, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `bench125-backup-${todayISO()}.json`;
+    a.click();
+  };
+  $("#btn-import").onclick = () => $("#import-file").click();
+  $("#import-file").onchange = ev => {
+    const f = ev.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try { const d = JSON.parse(rd.result); if (d.profile) { S = d; save(); alert("復元しました"); renderAll(); } else alert("形式が違います"); }
+      catch(e){ alert("読み込みに失敗: " + e.message); }
+    };
+    rd.readAsText(f);
+  };
+  $("#btn-reset").onclick = () => {
+    if (confirm("全データを削除して最初からやり直しますか?")) {
+      S = JSON.parse(JSON.stringify(DEFAULTS)); save(); location.reload();
+    }
+  };
+}
+function flash(sel, msg, ok) {
+  const e = $(sel); e.textContent = msg; e.className = "sync-status " + (ok ? "ok" : "err");
+}
+
+/* ---- tabs & init ---- */
+function renderAll() { renderToday(); renderProgram(); renderProgress(); renderSettings(); }
+document.querySelectorAll("nav.tabbar button").forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll("nav.tabbar button").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    $("#screen-" + b.dataset.tab).classList.add("active");
+    renderAll();
+    window.scrollTo(0, 0);
+  };
+});
+
+(function init() {
+  const d = new Date();
+  $("#today-date").textContent = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日(${WD[d.getDay()]})`;
+  if (!Store.usable) $("#storage-banner").style.display = "block";
+  if (!S.profile) {
+    // onboarding
+    const ob = $("#onboard");
+    ob.classList.add("show");
+    // default start: next Monday
+    const nd = new Date();
+    const daysToMon = (8 - nd.getDay()) % 7 || 7;
+    $("#ob-start").value = fmtISO(new Date(nd.getTime() + daysToMon * DAY));
+    $("#ob-go").onclick = () => {
+      const mx = parseFloat($("#ob-max").value) || 110;
+      S.profile = {
+        maxStart: mx,
+        goal: parseFloat($("#ob-goal").value) || 125,
+        benchDay: parseInt($("#ob-day").value),
+        startDate: $("#ob-start").value || todayISO(),
+        tm: round25(mx * 0.97)
+      };
+      save();
+      ob.classList.remove("show");
+      renderAll();
+    };
+  } else {
+    renderAll();
+  }
+})();
+</script>
+</body>
+</html>
