@@ -582,6 +582,33 @@ function adjustment(score) {
   return { zone: "low", label: "要回復", color: "var(--status-critical)", icon: "■", pct: -0.125, setDelta: -2 };
 }
 
+/* リカバリーメニュー (A-wear / リリースガン) */
+function recoveryMenu(session, adj) {
+  const zone = adj ? adj.zone : "none";
+  if (session.type === "test") return [
+    { name: "A-wear Work(5分)のみ", detail: "挑戦前は強い刺激を入れない。整えるだけにする", when: "前夜〜当日" }
+  ];
+  const items = [];
+  if (session.type === "bench") {
+    items.push({ name: "A-wear Work(5分)", detail: "ウォームアップの最初に。装着したままセットに入ってOK", when: "トレ前" });
+    items.push({ name: "リリースガン: 胸・三頭", detail: "各90秒、イタ気持ちいい強さ。翌日の張りが変わる", when: "トレ後" });
+    items.push({ name: "リリースガン: 前腕・背中", detail: "デッド後の張りに各60秒", when: "夜" });
+  } else if (session.type === "home-push") {
+    items.push({ name: "A-wear Work(5分)", detail: "ディップスの前に", when: "トレ前" });
+    items.push({ name: "リリースガン: 三角筋まわり", detail: "サイドレイズ後の肩に各60〜90秒。首すじも軽く", when: "トレ後" });
+  } else if (session.type === "home-pull") {
+    items.push({ name: "A-wear Work(5分)", detail: "懸垂の前に", when: "トレ前" });
+    items.push({ name: "リリースガン: 前腕・広背筋", detail: "前腕は入念に。リスト系の後は特に張りやすい", when: "トレ後" });
+  } else if (session.type === "rest") {
+    items.push({ name: "リリースガン: 全身軽く", detail: "胸・背中・脚を各60秒、血流を回す日", when: "いつでも" });
+    items.push({ name: "A-wear 日中装着", detail: "デスクワークや移動のあいだに", when: "日中" });
+  }
+  if (zone === "low" || zone === "caution") {
+    items.push({ name: "🛌 リカバリー強化モード", detail: "リリースガン10分+いつもより30分早く布団へ。明日のスコアで答え合わせしよう", when: "夜" });
+  }
+  return items;
+}
+
 /* コーチのメッセージ生成 */
 function coachMessage(session, cond, adj) {
   const wk = session.week;
@@ -1044,6 +1071,32 @@ function renderToday() {
     }
   }
   root.appendChild(wo);
+
+  /* リカバリーカード */
+  if (session.type !== "pre" && session.type !== "post") {
+    const rec = recoveryMenu(session, adj);
+    if (rec.length) {
+      const rc = el("div", "card");
+      rc.innerHTML = `<h2>リカバリー <span class="sub">A-wear & リリースガン</span></h2>`;
+      const log = S.logs[t] || {};
+      rec.forEach((r, i) => {
+        const row = el("div", "exercise");
+        const done = log.recovery && log.recovery[i];
+        row.innerHTML = `<div class="ex-head"><span class="ex-name">${esc(r.name)}</span><span class="ex-target">${esc(r.when)}</span></div><div class="ex-note">${esc(r.detail)}</div>`;
+        const chip = el("button", "set-chip" + (done ? " done" : ""), done ? "✓ 完了" : "やったらタップ");
+        chip.style.cssText = "margin-top:8px;min-width:110px";
+        chip.onclick = () => {
+          const L = S.logs[t] || { sets: {} };
+          L.recovery = L.recovery || {};
+          L.recovery[i] = !L.recovery[i];
+          S.logs[t] = L; save(); renderToday();
+        };
+        row.appendChild(chip);
+        rc.appendChild(row);
+      });
+      root.appendChild(rc);
+    }
+  }
 }
 
 function toggleManualCond(card, dateISO) {
