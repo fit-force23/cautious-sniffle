@@ -415,51 +415,40 @@ function accessories(week) {
   return [];
 }
 
-/* 自宅の日 (ディップス/懸垂バー/PUMP Pro/ダンベル10kg) */
+/* 自宅の日 (ディップス/懸垂バー/PUMP Pro/ダンベル10kg) — シフト固定休の金曜にまとめて1回 */
 function homeSessions(week) {
-  const push = { type: "home-push", title: "自宅・肩とプッシュの日", exercises: [] };
-  const pull = { type: "home-pull", title: "自宅・背中と前腕の日", exercises: [] };
+  const full = { type: "home-full", title: "自宅・肩と背中と前腕の日", exercises: [] };
   if (week <= 6) {
-    push.exercises = [
+    full.exercises = [
       { name: "ディップス", detail: () => "4セット × 8〜12回(できればリュック加重)", note: "深く下ろして胸で押す。ベンチ下部の強化" },
-      { name: "サイドレイズ(PUMP Pro or ダンベル)", detail: () => "4セット × 15回", note: "三角筋中部。軽くていいから丁寧に、最後は焼き切る" },
-      { name: "ダンベルショルダープレス", detail: () => "3セット × 10〜12回 @ 10kg", note: "10kgで足りなくなったらスローで(3秒下ろし)" },
-      { name: "リアデルトフライ(PUMP Pro)", detail: () => "3セット × 15回", note: "三角筋後部。肩の丸みと肩関節の健康はここで決まる" }
+      { name: "サイドレイズ(PUMP Pro or ダンベル)", detail: () => "3セット × 15回", note: "三角筋中部。軽くていいから丁寧に、最後は焼き切る" },
+      { name: "リアデルトフライ(PUMP Pro)", detail: () => "3セット × 15回", note: "三角筋後部。肩の丸みと肩関節の健康はここで決まる" },
+      { name: "懸垂", detail: () => "5セットで合計25〜30回", note: "肩甲骨を寄せて下ろしきる。ベンチの土台" },
+      { name: "リストカール+リバースリストカール(ダンベル)", detail: () => "各2セット × 15〜20回", note: "前腕の内側・外側。ベンチ台に前腕を乗せて手首だけ動かす" },
+      { name: "デッドハング(ぶら下がり)", detail: () => "3セット × 30〜60秒", note: "握力と前腕。デッドリフトの補強にそのまま効く" }
     ];
   } else if (week <= 12) {
-    push.exercises = [
-      { name: "加重ディップス", detail: () => "5セット × 5〜8回(リュックに重り)", note: "重さ優先。フォームが崩れない範囲で毎週+重量" },
-      { name: "サイドレイズ(PUMP Pro)", detail: () => "4セット × 12回(負荷を上げる)", note: "三角筋中部を成長させ続ける" },
-      { name: "パイクプッシュアップ", detail: () => "3セット × 10回", note: "肩の押す力。足を台に乗せると強度UP" },
-      { name: "リアデルトフライ(PUMP Pro)", detail: () => "3セット × 15回", note: "継続。ベンチの安定にも効く" }
-    ];
-  } else if (week <= 16) {
-    push.exercises = [
-      { name: "ディップス", detail: () => "3セット × 8回(自重)", note: "ピーキング中は自宅は軽め。疲労を持ち越さない" },
-      { name: "サイドレイズ(軽め)", detail: () => "3セット × 15回", note: "血流を回す程度でOK" }
-    ];
-  } else {
-    push.exercises = [
-      { name: "完全休養 or 散歩", detail: () => "—", note: "挑戦前は回復がトレーニング" }
-    ];
-  }
-  if (week <= 12) {
-    pull.exercises = [
+    full.exercises = [
+      { name: "加重ディップス", detail: () => "4セット × 5〜8回(リュックに重り)", note: "重さ優先。フォームが崩れない範囲で毎週+重量" },
+      { name: "サイドレイズ(PUMP Pro)", detail: () => "3セット × 12回(負荷を上げる)", note: "三角筋中部を成長させ続ける" },
+      { name: "リアデルトフライ(PUMP Pro)", detail: () => "3セット × 15回", note: "継続。ベンチの安定にも効く" },
       { name: "懸垂", detail: () => "5セットで合計25〜30回", note: "肩甲骨を寄せて下ろしきる。ベンチの土台" },
-      { name: "リストカール(ダンベル)", detail: () => "3セット × 15〜20回", note: "前腕の内側。ベンチ台に前腕を乗せて手首だけ動かす" },
-      { name: "リバースリストカール(ダンベル)", detail: () => "3セット × 12回", note: "前腕の外側。軽めでOK、バランスが大事" },
-      { name: "デッドハング(ぶら下がり)", detail: () => "3セット × 30〜60秒", note: "握力と前腕。デッドリフトの補強にそのまま効く" },
-      { name: "ハンマーカール(PUMP Pro or ダンベル)", detail: () => "3セット × 12回", note: "前腕の厚み(腕橈骨筋)はこれで作る" }
+      { name: "ハンマーカール(PUMP Pro or ダンベル)", detail: () => "3セット × 12回", note: "前腕の厚み(腕橈骨筋)はこれで作る" },
+      { name: "デッドハング(ぶら下がり)", detail: () => "2セット × 30〜60秒", note: "握力の保険" }
     ];
   } else if (week <= 16) {
-    pull.exercises = [
+    full.exercises = [
+      { name: "ディップス", detail: () => "3セット × 8回(自重)", note: "ピーキング中は自宅は軽め。疲労を持ち越さない" },
+      { name: "サイドレイズ(軽め)", detail: () => "2セット × 15回", note: "血流を回す程度でOK" },
       { name: "懸垂", detail: () => "3セット × 6〜8回", note: "維持でOK" },
       { name: "リストカール+デッドハング", detail: () => "各2セット(軽め)", note: "前腕は回復が速いので維持は簡単" }
     ];
   } else {
-    pull.exercises = [{ name: "休養", detail: () => "—", note: "睡眠を最優先" }];
+    full.exercises = [
+      { name: "完全休養 or 散歩", detail: () => "—", note: "挑戦前は回復がトレーニング。睡眠を最優先" }
+    ];
   }
-  return { push, pull };
+  return { full };
 }
 
 /* 週番号(1〜18)。開始前は0、終了後は19 */
@@ -477,13 +466,12 @@ function sessionFor(dateISO) {
   if (wk === 19) return { type: "post", title: "プログラム終了", week: 19 };
   const d = parseISO(dateISO).getDay();
   const benchDay = S.profile.benchDay;
-  const { push, pull } = homeSessions(wk);
-  // 自宅日はベンチ日の2日後(プッシュ)と4日後(プル)を基本に配置
-  const pushDay = (benchDay + 2) % 7, pullDay = (benchDay + 4) % 7;
+  const { full } = homeSessions(wk);
+  // 自宅日はベンチ日の翌日(固定休の2日目)にまとめて配置
+  const homeDay = (benchDay + 1) % 7;
   if (d === benchDay) return buildBenchSession(wk, dateISO);
-  if (d === pushDay) return { ...push, week: wk };
-  if (d === pullDay) return { ...pull, week: wk };
-  return { type: "rest", title: "休養日", week: wk };
+  if (d === homeDay) return { ...full, week: wk };
+  return { type: "rest", title: "休養日(任意: 余裕があれば軽く)", week: wk };
 }
 
 function currentTM() {
@@ -593,12 +581,9 @@ function recoveryMenu(session, adj) {
     items.push({ name: "A-wear Work(5分)", detail: "ウォームアップの最初に。装着したままセットに入ってOK", when: "トレ前" });
     items.push({ name: "リリースガン: 胸・三頭", detail: "各90秒、イタ気持ちいい強さ。翌日の張りが変わる", when: "トレ後" });
     items.push({ name: "リリースガン: 前腕・背中", detail: "デッド後の張りに各60秒", when: "夜" });
-  } else if (session.type === "home-push") {
-    items.push({ name: "A-wear Work(5分)", detail: "ディップスの前に", when: "トレ前" });
-    items.push({ name: "リリースガン: 三角筋まわり", detail: "サイドレイズ後の肩に各60〜90秒。首すじも軽く", when: "トレ後" });
-  } else if (session.type === "home-pull") {
-    items.push({ name: "A-wear Work(5分)", detail: "懸垂の前に", when: "トレ前" });
-    items.push({ name: "リリースガン: 前腕・広背筋", detail: "前腕は入念に。リスト系の後は特に張りやすい", when: "トレ後" });
+  } else if (session.type === "home-full") {
+    items.push({ name: "A-wear Work(5分)", detail: "ディップス・懸垂の前に", when: "トレ前" });
+    items.push({ name: "リリースガン: 三角筋・前腕・広背筋", detail: "肩まわり各60〜90秒、前腕は入念に。リスト系の後は特に張りやすい", when: "トレ後" });
   } else if (session.type === "rest") {
     items.push({ name: "リリースガン: 全身軽く", detail: "胸・背中・脚を各60秒、血流を回す日", when: "いつでも" });
     items.push({ name: "A-wear 日中装着", detail: "デスクワークや移動のあいだに", when: "日中" });
@@ -607,6 +592,24 @@ function recoveryMenu(session, adj) {
     items.push({ name: "🛌 リカバリー強化モード", detail: "リリースガン10分+いつもより30分早く布団へ。明日のスコアで答え合わせしよう", when: "夜" });
   }
   return items;
+}
+
+/* 任意の上腕・前腕ミニセット(休養日・気が向いたら・30分) */
+function bonusArmMenu(week) {
+  if (week >= 17) return []; // ピーキング〜挑戦週は完全休養優先、ボーナスなし
+  if (week <= 6) return [
+    { name: "ハンマーカール(PUMP Pro or ダンベル)", detail: () => "3セット × 12回" },
+    { name: "リストカール+リバースリストカール", detail: () => "各2セット × 15回" },
+    { name: "デッドハング", detail: () => "2セット × 30秒" }
+  ];
+  if (week <= 12) return [
+    { name: "ハンマーカール(重め)", detail: () => "3セット × 10回" },
+    { name: "リストカール", detail: () => "2セット × 15回" }
+  ];
+  return [
+    { name: "ハンマーカール(軽め)", detail: () => "2セット × 12回" },
+    { name: "リストカール", detail: () => "1セット × 15回" }
+  ];
 }
 
 /* コーチのメッセージ生成 */
@@ -631,11 +634,10 @@ function coachMessage(session, cond, adj) {
     }
     if (blk) msgs.push(`現在は<strong>${blk.name}</strong>(${blk.desc})。第${wk}週/18週。`);
   }
-  if (session.type === "home-push") msgs.push("ジムの日じゃなくても差は作れる。ディップスでベンチの土台を、サイドレイズとリアデルトで三角筋を育てる日。軽い重量こそ丁寧に。");
-  if (session.type === "home-pull") msgs.push("押す力は引く力の上に乗る。懸垂でベンチの土台を、リストカールとデッドハングで前腕と握力を作る。握力はそのままデッドリフトの保険になる。");
+  if (session.type === "home-full") msgs.push("固定休のこの日にまとめて仕上げる。ディップス・懸垂で押す力と引く力を、リストカールとデッドハングで握力を。急がず丁寧に、これが週の土台になる。");
   if (session.type === "rest") {
     if (adj.zone === "low") msgs.push("休むのも仕事のうち。今日はしっかり食べて寝よう。筋肉はジムじゃなく布団の中で強くなる。");
-    else msgs.push("今日は休養日。タンパク質は体重×2g、睡眠7時間以上。それが次のベンチの重量になる。");
+    else msgs.push("今日はシフトに合わせた完全フリーの日。無理に何かする必要はない。上腕・前腕だけなら30分でできるから、シフトがキツくない日は下のミニセット、気が向いたらどうぞ。遅番→朝番の日は問答無用でパス。");
   }
   const hb = hrvBaseline();
   if (cond && cond.hrv > 0 && hb && cond.hrv < hb * 0.85) msgs.push(`⚠️ HRVが14日平均より15%以上低い(${Math.round(cond.hrv)}ms / 平均${Math.round(hb)}ms)。飲酒・寝不足・ストレスに心当たりは?`);
@@ -962,6 +964,33 @@ function renderToday() {
     wo.appendChild(el("p", "muted", `プログラムは ${fmtJP(S.profile.startDate)} に始まります。それまでは普段どおりでOK。開始日を変えたい場合は「連携」タブから。`));
   } else if (session.type === "rest") {
     wo.appendChild(el("p", "muted", "トレーニングはなし。回復に全振りする日。"));
+    const bonus = bonusArmMenu(wk);
+    if (bonus.length) {
+      const bw = el("div", "");
+      bw.style.marginTop = "12px";
+      const toggle = el("button", "toggle-table", "▸ 任意: 上腕・前腕ミニセット(30分・気が向いたらでOK)");
+      const body = el("div"); body.style.display = "none";
+      body.appendChild(el("p", "muted", "遅番→朝番みたいなキツい切り替え日は無視してOK。それ以外の休みで、やる気があれば。"));
+      const log = S.logs[t] || {};
+      bonus.forEach((ex, i) => {
+        const row = el("div", "exercise");
+        const done = log.bonusArm && log.bonusArm[i];
+        row.innerHTML = `<div class="ex-head"><span class="ex-name">${esc(ex.name)}</span><span class="ex-target">${ex.detail()}</span></div>`;
+        const chip = el("button", "set-chip" + (done ? " done" : ""), done ? "✓ 完了" : "やったらタップ");
+        chip.style.cssText = "margin-top:6px;min-width:110px";
+        chip.onclick = () => {
+          const L = S.logs[t] || { sets: {} };
+          L.bonusArm = L.bonusArm || {};
+          L.bonusArm[i] = !L.bonusArm[i];
+          S.logs[t] = L; save(); renderToday();
+        };
+        row.appendChild(chip);
+        body.appendChild(row);
+      });
+      toggle.onclick = () => { const s = body.style.display === "none"; body.style.display = s ? "block" : "none"; toggle.textContent = s ? "▾ 上腕・前腕ミニセットを閉じる" : "▸ 任意: 上腕・前腕ミニセット(30分・気が向いたらでOK)"; };
+      bw.appendChild(toggle); bw.appendChild(body);
+      wo.appendChild(bw);
+    }
   } else if (session.type === "post") {
     wo.appendChild(el("p", "muted", "18週間おつかれさま!新しい目標で再スタートするには「連携」タブ→リセットから。"));
   } else if (session.exercises) {
@@ -1150,8 +1179,9 @@ function renderProgram() {
     <div class="tile"><div class="label">目標</div><div class="value">${S.profile.goal}<small> kg</small></div><div class="delta">${curWk >= 1 && curWk <= 18 ? `第${curWk}週 / 18週` : "開始前"}</div></div>`;
   root.appendChild(head);
 
+  const homeDay = (S.profile.benchDay + 1) % 7;
   const card = el("div", "card");
-  card.innerHTML = `<h2>18週間ロードマップ <span class="sub">ベンチ日: ${WD[S.profile.benchDay]}曜</span></h2>`;
+  card.innerHTML = `<h2>18週間ロードマップ <span class="sub">ジム: ${WD[S.profile.benchDay]}曜 ・ 自宅: ${WD[homeDay]}曜</span></h2>`;
   BLOCKS.forEach(b => {
     card.appendChild(el("div", "block-head", `${b.name.toUpperCase()} — ${b.desc}`));
     for (let w = b.range[0]; w <= b.range[1]; w++) {
@@ -1171,7 +1201,7 @@ function renderProgram() {
 
   const note = el("div", "card coach-card");
   note.innerHTML = `<h2>このプログラムの考え方</h2>
-    <p><strong>週1のジム(ベンチ→デッド)+自宅2日(肩の日・背中と前腕の日)</strong>で組んである。ベンチ日はトップセットとバックオフの2段構え、その後にデッドリフト。デッドはW12まで伸ばし、ピーキングに入ったら維持に切り替えてベンチの回復に全てを注ぐ。</p>
+    <p><strong>週1のジム(ベンチ→デッド)+週1の自宅フル(肩・背中・前腕をまとめて1日)</strong>で組んである。固定休の2日に集中させて、シフトが読めない他の曜日は完全フリーにしてある。ベンチ日はトップセットとバックオフの2段構え、その後にデッドリフト。デッドはW12まで伸ばし、ピーキングに入ったら維持に切り替えてベンチの回復に全てを注ぐ。</p>
     <p>重量は毎回のコンディションスコアで自動調整される。<strong>数字はあくまで提案</strong>——バーの速度が明らかに遅い日は自分でも下げてOK。逆に記録を入れると推定MAXからTMが自動で上がっていく。</p>
     <p>4週・10週・17週は意図的に軽い回復週。<strong>飛ばさないこと。</strong>ここで超回復が起きる。</p>`;
   root.appendChild(note);
