@@ -243,12 +243,17 @@ details.help .help-body a { color: var(--series-1); }
         <input type="number" id="ob-goal" value="125" step="2.5" inputmode="decimal"></label>
       <label class="field"><span class="fl">デッドリフトの現在のMAX(kg)</span>
         <input type="number" id="ob-dlmax" value="130" step="2.5" inputmode="decimal"></label>
-      <label class="field"><span class="fl">ジムでベンチをやる曜日</span>
-        <select id="ob-day">
+      <label class="field"><span class="fl">Day1 ベンチの日(曜日)</span>
+        <select id="ob-day1">
           <option value="1">月曜日</option><option value="2">火曜日</option><option value="3">水曜日</option>
-          <option value="4">木曜日</option><option value="5">金曜日</option><option value="6" selected>土曜日</option><option value="0">日曜日</option>
+          <option value="4" selected>木曜日</option><option value="5">金曜日</option><option value="6">土曜日</option><option value="0">日曜日</option>
         </select></label>
-      <label class="field"><span class="fl">プログラム開始日</span>
+      <label class="field"><span class="fl">Day2 デッド+脚の日(曜日・連続でOK)</span>
+        <select id="ob-day2">
+          <option value="1">月曜日</option><option value="2">火曜日</option><option value="3">水曜日</option>
+          <option value="4">木曜日</option><option value="5" selected>金曜日</option><option value="6">土曜日</option><option value="0">日曜日</option>
+        </select></label>
+      <label class="field"><span class="fl">開始日(記録用)</span>
         <input type="date" id="ob-start"></label>
       <button class="btn" id="ob-go">18週間プログラムを生成する</button>
       <p class="small-note">MAXはケツ上げなしで確実に挙がる重量に近い値を。115kgがギリギリ(ケツ上げ)なら 110〜112.5kg が目安です。</p>
@@ -326,7 +331,8 @@ const Store = (() => {
 
 /* ---------- state ---------- */
 const DEFAULTS = {
-  profile: null, // {maxStart, goal, benchDay, startDate, tm}
+  profile: null, // {maxStart, goal, day1, day2, startDate, tm, dlTm}
+  progress: { week: 1, history: [] }, // 実施ベースの週カウンター(日付に依存しない)
   logs: {},      // dateISO -> {sets:{exIdx:[bool,...]}, topWeight, topReps, e1rm, note}
   condition: {}, // dateISO -> {score, src, readiness, sleepScore, hrv, rhr, subjective}
   tokens: { oura: "", fitbit: "" },
@@ -401,77 +407,93 @@ const DL_PLAN = {
   18: null
 };
 
-/* ジム・ベンチの日の補助種目 (ブロックにより変化) */
-function accessories(week) {
+/* Day1(ベンチの日)の補助種目 — 押す系(胸・肩・三頭)。pctはベンチTM基準 */
+function day1Accessories(week) {
   if (week <= 6) return [
-    { name: "止めベンチ(2秒止め)", detail: pct => `3セット × 6回 @ ${pct(.65)}kg`, note: "胸で完全に止めて爆発。ケツ上げ癖の矯正に最重要" }
+    { name: "止めベンチ(2秒止め)", detail: pct => `3セット × 6回 @ ${pct(.65)}kg`, note: "胸で完全に止めて爆発。ケツ上げ癖の矯正に最重要" },
+    { name: "ダンベルショルダープレス", detail: () => "3セット × 10〜12回 @ 10kg", note: "肩の押す力。10kgで軽くなったら3秒かけて下ろすスローで効かせる" },
+    { name: "サイドレイズ(PUMP Pro or ダンベル)", detail: () => "4セット × 15回", note: "三角筋中部。軽くていいから丁寧に、最後は焼き切る" },
+    { name: "ディップス", detail: () => "3セット × 8〜12回", note: "深く下ろして胸で押す。ベンチ下部と三頭の強化" }
   ];
   if (week <= 12) return [
-    { name: "止めベンチ(1秒止め)", detail: pct => `3セット × 3回 @ ${pct(.75)}kg`, note: "試技と同じ胸止めで強く" }
+    { name: "止めベンチ(1秒止め)", detail: pct => `3セット × 3回 @ ${pct(.75)}kg`, note: "試技と同じ胸止めで強く" },
+    { name: "ダンベルショルダープレス", detail: () => "4セット × 8〜10回 @ 10kg(スロー)", note: "肩は押す力の底上げ。ゆっくり効かせて負荷を稼ぐ" },
+    { name: "サイドレイズ(PUMP Pro)", detail: () => "4セット × 12回(負荷UP)", note: "三角筋中部を成長させ続ける" },
+    { name: "加重ディップス", detail: () => "4セット × 5〜8回(リュックに重り)", note: "三頭を重さで。フォームが崩れない範囲で毎週+重量" }
   ];
   if (week <= 16) return [
-    { name: "止めベンチ(1秒止め)", detail: pct => `2セット × 2回 @ ${pct(.80)}kg`, note: "重量に慣れる。丁寧に" }
+    { name: "止めベンチ(1秒止め)", detail: pct => `2セット × 2回 @ ${pct(.80)}kg`, note: "高重量に慣れる。丁寧に" },
+    { name: "サイドレイズ(軽め)", detail: () => "3セット × 15回", note: "血流を回す程度でOK。疲労を持ち越さない" }
+  ];
+  if (week === 17) return [
+    { name: "止めベンチ(軽く爆発)", detail: pct => `2セット × 3回 @ ${pct(.55)}kg`, note: "テーパー。速く挙げる意識だけ、疲れは残さない" }
   ];
   return [];
 }
 
-/* 自宅の日 (ディップス/懸垂バー/PUMP Pro/ダンベル10kg) — シフト固定休の金曜にまとめて1回 */
-function homeSessions(week) {
-  const full = { type: "home-full", title: "自宅・肩と背中と前腕の日", exercises: [] };
-  if (week <= 6) {
-    full.exercises = [
-      { name: "ディップス", detail: () => "4セット × 8〜12回(できればリュック加重)", note: "深く下ろして胸で押す。ベンチ下部の強化" },
-      { name: "サイドレイズ(PUMP Pro or ダンベル)", detail: () => "3セット × 15回", note: "三角筋中部。軽くていいから丁寧に、最後は焼き切る" },
-      { name: "リアデルトフライ(PUMP Pro)", detail: () => "3セット × 15回", note: "三角筋後部。肩の丸みと肩関節の健康はここで決まる" },
-      { name: "懸垂", detail: () => "5セットで合計25〜30回", note: "肩甲骨を寄せて下ろしきる。ベンチの土台" },
-      { name: "リストカール+リバースリストカール(ダンベル)", detail: () => "各2セット × 15〜20回", note: "前腕の内側・外側。ベンチ台に前腕を乗せて手首だけ動かす" },
-      { name: "デッドハング(ぶら下がり)", detail: () => "3セット × 30〜60秒", note: "握力と前腕。デッドリフトの補強にそのまま効く" }
-    ];
-  } else if (week <= 12) {
-    full.exercises = [
-      { name: "加重ディップス", detail: () => "4セット × 5〜8回(リュックに重り)", note: "重さ優先。フォームが崩れない範囲で毎週+重量" },
-      { name: "サイドレイズ(PUMP Pro)", detail: () => "3セット × 12回(負荷を上げる)", note: "三角筋中部を成長させ続ける" },
-      { name: "リアデルトフライ(PUMP Pro)", detail: () => "3セット × 15回", note: "継続。ベンチの安定にも効く" },
-      { name: "懸垂", detail: () => "5セットで合計25〜30回", note: "肩甲骨を寄せて下ろしきる。ベンチの土台" },
-      { name: "ハンマーカール(PUMP Pro or ダンベル)", detail: () => "3セット × 12回", note: "前腕の厚み(腕橈骨筋)はこれで作る" },
-      { name: "デッドハング(ぶら下がり)", detail: () => "2セット × 30〜60秒", note: "握力の保険" }
-    ];
-  } else if (week <= 16) {
-    full.exercises = [
-      { name: "ディップス", detail: () => "3セット × 8回(自重)", note: "ピーキング中は自宅は軽め。疲労を持ち越さない" },
-      { name: "サイドレイズ(軽め)", detail: () => "2セット × 15回", note: "血流を回す程度でOK" },
-      { name: "懸垂", detail: () => "3セット × 6〜8回", note: "維持でOK" },
-      { name: "リストカール+デッドハング", detail: () => "各2セット(軽め)", note: "前腕は回復が速いので維持は簡単" }
-    ];
-  } else {
-    full.exercises = [
-      { name: "完全休養 or 散歩", detail: () => "—", note: "挑戦前は回復がトレーニング。睡眠を最優先" }
-    ];
-  }
-  return { full };
+/* Day2(デッド+脚の日)の補助種目 — 脚(レッグプレス)+引く系(背中・前腕) */
+/* レッグプレス: 20kgプレート12枚(最大240kg)しかないので、重量より高回数・止め・スローで効かせる設計 */
+function day2Accessories(week) {
+  const legNote = "プレートは20kg×12枚まで。重さが頭打ちなら1秒止め→2秒止め→スロー(4秒下ろし)→片脚で強度を上げる";
+  if (week <= 6) return [
+    { name: "レッグプレス(高回数)", detail: () => "3セット × 15〜20回(1秒止め)", note: "大腿四頭筋。" + legNote },
+    { name: "懸垂", detail: () => "5セットで合計25〜30回", note: "肩甲骨を寄せて下ろしきる。背中とデッドの引きの土台" },
+    { name: "ハンマーカール(PUMP Pro or ダンベル)", detail: () => "3セット × 12回", note: "前腕の厚み(腕橈骨筋)。デッドの握りにも効く" },
+    { name: "デッドハング(ぶら下がり)", detail: () => "3セット × 30〜60秒", note: "握力。そのままデッドリフトの保険になる" }
+  ];
+  if (week <= 12) return [
+    { name: "レッグプレス(効かせ重視)", detail: () => "4セット × 12〜15回(2秒止め)", note: "大腿四頭筋。" + legNote },
+    { name: "加重懸垂 or 懸垂", detail: () => "5セット × 5〜8回", note: "背中を重さで。余裕が出たらリュック加重" },
+    { name: "ハンマーカール", detail: () => "3セット × 12回(負荷UP)", note: "前腕を育て続ける" },
+    { name: "デッドハング", detail: () => "3セット × 45〜60秒", note: "握力の底上げ。デッドの後半が変わる" }
+  ];
+  if (week <= 16) return [
+    { name: "レッグプレス(維持)", detail: () => "2セット × 15回", note: "ピーキング中は脚も維持。" + legNote },
+    { name: "懸垂", detail: () => "3セット × 6〜8回", note: "背中は維持でOK" },
+    { name: "デッドハング", detail: () => "2セット × 30秒", note: "握力維持。軽く" }
+  ];
+  if (week === 17) return [
+    { name: "レッグプレス(軽く)", detail: () => "2セット × 12回(軽め)", note: "血流を回すだけ。疲れは残さない" },
+    { name: "懸垂(軽め)", detail: () => "2セット × 5回", note: "維持でOK" }
+  ];
+  return [];
 }
 
-/* 週番号(1〜18)。開始前は0、終了後は19 */
-function weekOf(dateISO) {
+/* 現在のプログラム週(1〜18)。実施ベースの進捗カウンターで管理。19=完了 */
+function currentWeek() {
   if (!S.profile) return 0;
-  const diff = Math.floor((parseISO(dateISO) - parseISO(S.profile.startDate)) / DAY);
-  if (diff < 0) return 0;
-  return Math.min(19, Math.floor(diff / 7) + 1);
+  if (!S.progress) S.progress = { week: 1, history: [] };
+  return Math.min(19, Math.max(1, S.progress.week || 1));
+}
+/* 後方互換: 日付ではなく現在の進捗週を返す */
+function weekOf(dateISO) { return currentWeek(); }
+
+/* 週を進める / 戻す(岡山・お盆で飛んでも、実施した分だけ進む) */
+function advanceWeek(dateISO) {
+  if (!S.progress) S.progress = { week: 1, history: [] };
+  if (S.progress.week >= 19) return;
+  S.progress.history = S.progress.history || [];
+  S.progress.history.push({ week: S.progress.week, done: dateISO || todayISO() });
+  S.progress.week = Math.min(19, S.progress.week + 1);
+  save();
+}
+function rewindWeek() {
+  if (!S.progress) S.progress = { week: 1, history: [] };
+  S.progress.week = Math.max(1, (S.progress.week || 1) - 1);
+  if (S.progress.history && S.progress.history.length) S.progress.history.pop();
+  save();
 }
 
-/* その日のセッションを決定 */
+/* その日のセッションを決定(週2: Day1=ベンチ / Day2=デッド+脚) */
 function sessionFor(dateISO) {
-  const wk = weekOf(dateISO);
-  if (wk === 0) return { type: "pre", title: "プログラム開始前", week: 0 };
-  if (wk === 19) return { type: "post", title: "プログラム終了", week: 19 };
+  if (!S.profile) return { type: "pre", title: "プログラム開始前", week: 0 };
+  const wk = currentWeek();
+  if (wk >= 19) return { type: "post", title: "プログラム完了", week: 19 };
   const d = parseISO(dateISO).getDay();
-  const benchDay = S.profile.benchDay;
-  const { full } = homeSessions(wk);
-  // 自宅日はベンチ日の翌日(固定休の2日目)にまとめて配置
-  const homeDay = (benchDay + 1) % 7;
-  if (d === benchDay) return buildBenchSession(wk, dateISO);
-  if (d === homeDay) return { ...full, week: wk };
-  return { type: "rest", title: "休養日(任意: 余裕があれば軽く)", week: wk };
+  const day1 = S.profile.day1, day2 = S.profile.day2;
+  if (d === day1) return buildDay1(wk, dateISO);
+  if (d === day2) return buildDay2(wk, dateISO);
+  return { type: "rest", title: "休養日", week: wk };
 }
 
 function currentTM() {
@@ -479,7 +501,8 @@ function currentTM() {
   return S.profile.tm;
 }
 
-function buildBenchSession(wk, dateISO) {
+/* Day1: ベンチの日(押す系) */
+function buildDay1(wk, dateISO) {
   const plan = WEEK_PLAN[wk];
   const tm = currentTM();
   const pct = p => round25(tm * p);
@@ -505,17 +528,22 @@ function buildBenchSession(wk, dateISO) {
     weight: pct(plan.back.pct), reps: plan.back.reps, sets: plan.back.sets,
     note: "ボリュームの主役。丁寧に同じフォームで"
   });
-  accessories(wk).forEach(a => ex.push({ name: a.name, detail: () => a.detail(pct), note: a.note }));
-  /* デッドリフト(ベンチの後) */
+  day1Accessories(wk).forEach(a => ex.push({ name: a.name, detail: () => a.detail(pct), note: a.note }));
+  return { type: "day1", title: `Day1 ベンチの日`, week: wk, exercises: ex, plan };
+}
+
+/* Day2: デッド+脚の日(引く+下半身) */
+function buildDay2(wk, dateISO) {
+  const dtm = S.profile.dlTm || 125;
+  const dpct = p => round25(dtm * p);
   const dl = DL_PLAN[wk];
+  const ex = [];
   if (dl) {
-    const dtm = S.profile.dlTm || 125;
-    const dpct = p => round25(dtm * p);
     ex.push({
       name: "デッドリフト トップセット", key: "dl-top",
       detail: () => `${dl.top.sets}セット × ${dl.top.reps}回 @ ${dpct(dl.top.pct)}kg`,
       weight: dpct(dl.top.pct), reps: dl.top.reps, sets: dl.top.sets,
-      note: wk <= 12 ? "ベンチの後の主役2本目。腰が丸まる重量は扱わない" : "ピーキング中は維持が目的。ベンチの回復を最優先"
+      note: wk <= 12 ? "今日の主役。床から爆発、腰が丸まる重量は扱わない" : "ピーキング中は維持が目的。フォーム重視で丁寧に"
     });
     if (dl.back) ex.push({
       name: "デッドリフト バックオフ", key: "dl-back",
@@ -523,8 +551,15 @@ function buildBenchSession(wk, dateISO) {
       weight: dpct(dl.back.pct), reps: dl.back.reps, sets: dl.back.sets,
       note: "毎レップ床から。ストラップ使ってOK、素手なら前腕も育つ"
     });
+  } else {
+    ex.push({
+      name: "デッドリフト(軽く or 休養)",
+      detail: () => "やるなら 60〜70% × 3回 × 2セット。キツければ完全休養",
+      note: "ベンチ125挑戦の週。デッドは無理せず、挑戦に疲労を残さない"
+    });
   }
-  return { type: "bench", title: `ベンチ&デッドの日 — 第${wk}週`, week: wk, exercises: ex, plan };
+  day2Accessories(wk).forEach(a => ex.push({ name: a.name, detail: () => a.detail(dpct), note: a.note }));
+  return { type: "day2", title: `Day2 デッド+脚の日`, week: wk, exercises: ex, plan: dl };
 }
 
 /* ================================================================
@@ -577,13 +612,14 @@ function recoveryMenu(session, adj) {
     { name: "A-wear Work(5分)のみ", detail: "挑戦前は強い刺激を入れない。整えるだけにする", when: "前夜〜当日" }
   ];
   const items = [];
-  if (session.type === "bench") {
+  if (session.type === "day1") {
     items.push({ name: "A-wear Work(5分)", detail: "ウォームアップの最初に。装着したままセットに入ってOK", when: "トレ前" });
-    items.push({ name: "リリースガン: 胸・三頭", detail: "各90秒、イタ気持ちいい強さ。翌日の張りが変わる", when: "トレ後" });
-    items.push({ name: "リリースガン: 前腕・背中", detail: "デッド後の張りに各60秒", when: "夜" });
-  } else if (session.type === "home-full") {
-    items.push({ name: "A-wear Work(5分)", detail: "ディップス・懸垂の前に", when: "トレ前" });
-    items.push({ name: "リリースガン: 三角筋・前腕・広背筋", detail: "肩まわり各60〜90秒、前腕は入念に。リスト系の後は特に張りやすい", when: "トレ後" });
+    items.push({ name: "リリースガン: 胸・三頭・肩", detail: "各90秒、イタ気持ちいい強さ。翌日の張りが変わる", when: "トレ後" });
+    items.push({ name: "リリースガン: 腰まわりを軽く", detail: "明日のデッドに備えて腰・お尻を各60秒ほぐす", when: "夜" });
+  } else if (session.type === "day2") {
+    items.push({ name: "A-wear Work(5分)", detail: "デッドのウォームアップ前に。腰・ハムを起こす", when: "トレ前" });
+    items.push({ name: "リリースガン: 脚・お尻・ハム", detail: "レッグプレスとデッド後の下半身に各90秒", when: "トレ後" });
+    items.push({ name: "リリースガン: 前腕・広背筋", detail: "デッドとデッドハングの後は前腕が張りやすい。各60秒", when: "夜" });
   } else if (session.type === "rest") {
     items.push({ name: "リリースガン: 全身軽く", detail: "胸・背中・脚を各60秒、血流を回す日", when: "いつでも" });
     items.push({ name: "A-wear 日中装着", detail: "デスクワークや移動のあいだに", when: "日中" });
@@ -592,24 +628,6 @@ function recoveryMenu(session, adj) {
     items.push({ name: "🛌 リカバリー強化モード", detail: "リリースガン10分+いつもより30分早く布団へ。明日のスコアで答え合わせしよう", when: "夜" });
   }
   return items;
-}
-
-/* 任意の上腕・前腕ミニセット(休養日・気が向いたら・30分) */
-function bonusArmMenu(week) {
-  if (week >= 17) return []; // ピーキング〜挑戦週は完全休養優先、ボーナスなし
-  if (week <= 6) return [
-    { name: "ハンマーカール(PUMP Pro or ダンベル)", detail: () => "3セット × 12回" },
-    { name: "リストカール+リバースリストカール", detail: () => "各2セット × 15回" },
-    { name: "デッドハング", detail: () => "2セット × 30秒" }
-  ];
-  if (week <= 12) return [
-    { name: "ハンマーカール(重め)", detail: () => "3セット × 10回" },
-    { name: "リストカール", detail: () => "2セット × 15回" }
-  ];
-  return [
-    { name: "ハンマーカール(軽め)", detail: () => "2セット × 12回" },
-    { name: "リストカール", detail: () => "1セット × 15回" }
-  ];
 }
 
 /* コーチのメッセージ生成 */
@@ -622,22 +640,27 @@ function coachMessage(session, cond, adj) {
     if (adj.zone === "low" || adj.zone === "caution") msgs.push("ただしコンディションが万全じゃない。挑戦日を2〜3日ずらす勇気も強さだ。");
     return msgs;
   }
-  if (session.type === "bench") {
+  if (session.type === "day1") {
     if (adj.zone === "peak") msgs.push(`<strong>今日は攻める日だ。</strong>回復データが最高レベル。トップセットは<strong>+2.5kg</strong>上乗せした重量を提案してある。獲りにいこう。`);
     else if (adj.zone === "good") msgs.push(`コンディション良好。<strong>プログラム通り</strong>でいこう。今日の仕事は${WEEK_PLAN[wk] ? WEEK_PLAN[wk].label : ""}。`);
     else if (adj.zone === "caution") msgs.push(`回復が追いついていない。今日は<strong>重量を5%下げ、セットを1つ減らした</strong>。軽い日に丁寧に積むのが、結局いちばん強くなる。`);
-    else if (adj.zone === "low") msgs.push(`<strong>今日は無理をしない日。</strong>重量を12.5%落としてフォーム練習に切り替えた。それでもキツければ完全休養に。1回のワークアウトより18週間の継続が125kgを作る。`);
+    else if (adj.zone === "low") msgs.push(`<strong>今日は無理をしない日。</strong>重量を12.5%落としてフォーム練習に切り替えた。それでもキツければ完全休養に。1回のワークアウトより継続が125kgを作る。`);
     else msgs.push(`朝のコンディションを入力(または同期)すると、今日の重量を自動調整するよ。`);
-    if (DL_PLAN[wk]) {
-      if (adj.zone === "caution" || adj.zone === "low") msgs.push("順番はベンチ→デッド。疲労がある日は<strong>デッドから削る</strong>のが鉄則——ベンチの125kgが主役だ。");
-      else msgs.push("順番はベンチ→デッド。ベンチに全力を置いて、デッドは丁寧に強く。");
-    }
+    msgs.push("<strong>Day1はベンチ最優先の日。</strong>トップ→バックオフでベンチに全力。そのあと肩・三頭を足して押す力を底上げする。明日のDay2(デッド+脚)に響かせないため、補助は追い込みすぎない。");
     if (blk) msgs.push(`現在は<strong>${blk.name}</strong>(${blk.desc})。第${wk}週/18週。`);
   }
-  if (session.type === "home-full") msgs.push("固定休のこの日にまとめて仕上げる。ディップス・懸垂で押す力と引く力を、リストカールとデッドハングで握力を。急がず丁寧に、これが週の土台になる。");
+  if (session.type === "day2") {
+    if (adj.zone === "peak") msgs.push(`<strong>回復は絶好調。</strong>デッドのトップセットに<strong>+2.5kg</strong>乗せた重量を提案してある。床から爆発だ。`);
+    else if (adj.zone === "good") msgs.push(`コンディション良好。<strong>プログラム通り</strong>デッドと脚をやりきろう。`);
+    else if (adj.zone === "caution") msgs.push(`昨日のDay1の疲れも残る頃。今日は<strong>重量5%減・セット1つ減</strong>で調整した。デッドは腰が資本、無理は禁物。`);
+    else if (adj.zone === "low") msgs.push(`<strong>疲労が強い。</strong>デッドは12.5%落としてフォーム練習に。キツければ脚(レッグプレス)だけにして切り上げてOK。`);
+    else msgs.push(`朝のコンディションを入力(または同期)すると、今日の重量を自動調整するよ。`);
+    msgs.push("<strong>Day2はデッド+脚。</strong>ベンチ(125)が主役だから、デッドは丁寧に強く、が基本方針。脚はレッグプレス中心——プレートが20kg×12枚までだから、重さより高回数・止め・スローで効かせる。");
+    if (blk) msgs.push(`現在は<strong>${blk.name}</strong>(${blk.desc})。第${wk}週/18週。`);
+  }
   if (session.type === "rest") {
     if (adj.zone === "low") msgs.push("休むのも仕事のうち。今日はしっかり食べて寝よう。筋肉はジムじゃなく布団の中で強くなる。");
-    else msgs.push("今日はシフトに合わせた完全フリーの日。無理に何かする必要はない。上腕・前腕だけなら30分でできるから、シフトがキツくない日は下のミニセット、気が向いたらどうぞ。遅番→朝番の日は問答無用でパス。");
+    else msgs.push("今日は休養日。タンパク質は体重×2g、睡眠7時間以上。それが次のベンチの重量になる。余裕があれば自宅でサイドレイズや懸垂を軽く足してもOK(必須じゃない)。");
   }
   const hb = hrvBaseline();
   if (cond && cond.hrv > 0 && hb && cond.hrv < hb * 0.85) msgs.push(`⚠️ HRVが14日平均より15%以上低い(${Math.round(cond.hrv)}ms / 平均${Math.round(hb)}ms)。飲酒・寝不足・ストレスに心当たりは?`);
@@ -964,33 +987,6 @@ function renderToday() {
     wo.appendChild(el("p", "muted", `プログラムは ${fmtJP(S.profile.startDate)} に始まります。それまでは普段どおりでOK。開始日を変えたい場合は「連携」タブから。`));
   } else if (session.type === "rest") {
     wo.appendChild(el("p", "muted", "トレーニングはなし。回復に全振りする日。"));
-    const bonus = bonusArmMenu(wk);
-    if (bonus.length) {
-      const bw = el("div", "");
-      bw.style.marginTop = "12px";
-      const toggle = el("button", "toggle-table", "▸ 任意: 上腕・前腕ミニセット(30分・気が向いたらでOK)");
-      const body = el("div"); body.style.display = "none";
-      body.appendChild(el("p", "muted", "遅番→朝番みたいなキツい切り替え日は無視してOK。それ以外の休みで、やる気があれば。"));
-      const log = S.logs[t] || {};
-      bonus.forEach((ex, i) => {
-        const row = el("div", "exercise");
-        const done = log.bonusArm && log.bonusArm[i];
-        row.innerHTML = `<div class="ex-head"><span class="ex-name">${esc(ex.name)}</span><span class="ex-target">${ex.detail()}</span></div>`;
-        const chip = el("button", "set-chip" + (done ? " done" : ""), done ? "✓ 完了" : "やったらタップ");
-        chip.style.cssText = "margin-top:6px;min-width:110px";
-        chip.onclick = () => {
-          const L = S.logs[t] || { sets: {} };
-          L.bonusArm = L.bonusArm || {};
-          L.bonusArm[i] = !L.bonusArm[i];
-          S.logs[t] = L; save(); renderToday();
-        };
-        row.appendChild(chip);
-        body.appendChild(row);
-      });
-      toggle.onclick = () => { const s = body.style.display === "none"; body.style.display = s ? "block" : "none"; toggle.textContent = s ? "▾ 上腕・前腕ミニセットを閉じる" : "▸ 任意: 上腕・前腕ミニセット(30分・気が向いたらでOK)"; };
-      bw.appendChild(toggle); bw.appendChild(body);
-      wo.appendChild(bw);
-    }
   } else if (session.type === "post") {
     wo.appendChild(el("p", "muted", "18週間おつかれさま!新しい目標で再スタートするには「連携」タブ→リセットから。"));
   } else if (session.exercises) {
@@ -999,7 +995,7 @@ function renderToday() {
       let weightNote = "";
       let shownDetail = ex.detail();
       const backKey = ex.key === "back" || ex.key === "dl-back";
-      if (ex.weight && adj.pct !== 0 && (session.type === "bench")) {
+      if (ex.weight && adj.pct !== 0 && (session.type === "day1" || session.type === "day2")) {
         const newW = round25(ex.weight * (1 + adj.pct));
         let sets = ex.sets;
         if (backKey && adj.setDelta) sets = Math.max(1, ex.sets + adj.setDelta);
@@ -1023,6 +1019,7 @@ function renderToday() {
             L.sets = L.sets || {};
             L.sets[idx] = L.sets[idx] || [];
             L.sets[idx][i] = !L.sets[idx][i];
+            L.week = currentWeek();
             S.logs[t] = L; save(); renderToday();
           };
           row.appendChild(chip);
@@ -1032,7 +1029,7 @@ function renderToday() {
       wo.appendChild(exEl);
     });
     /* トップセット実績の記録 */
-    if (session.type === "bench" || session.type === "test") {
+    if (session.type === "day1" || session.type === "test") {
       const div = el("div", "divider");
       wo.appendChild(div);
       const log = S.logs[t] || {};
@@ -1052,6 +1049,7 @@ function renderToday() {
         if (!w || !r) return;
         const L = S.logs[t] || { sets: {} };
         L.topWeight = w; L.topReps = r; L.e1rm = Math.round(epley(w, r) * 10) / 10;
+        L.week = currentWeek();
         S.logs[t] = L;
         // TM自動更新提案: e1RMの97%がTMを上回ったら更新
         const suggested = round25(L.e1rm * 0.97);
@@ -1065,8 +1063,13 @@ function renderToday() {
       recWrap.appendChild(grid);
       if (log.e1rm) recWrap.appendChild(el("p", "small-note", `本日の推定1RM: <b>${log.e1rm}kg</b> ${log.e1rm >= S.profile.goal ? "🎉 目標到達レベル!" : `(目標まであと ${Math.max(0, Math.round((S.profile.goal - log.e1rm)*10)/10)}kg)`}`));
       wo.appendChild(recWrap);
-      /* デッドリフト記録 */
-      if (session.type === "bench" && DL_PLAN[session.week]) {
+    }
+    /* デッドリフト記録 (Day2) */
+    if (session.type === "day2") {
+      const div2 = el("div", "divider");
+      wo.appendChild(div2);
+      const log = S.logs[t] || {};
+      if (DL_PLAN[session.week]) {
         const dlWrap = el("div");
         dlWrap.style.marginTop = "14px";
         dlWrap.innerHTML = `<h2>デッドリフトのベスト記録</h2>`;
@@ -1084,6 +1087,7 @@ function renderToday() {
           if (!w || !r) return;
           const L = S.logs[t] || { sets: {} };
           L.dlWeight = w; L.dlReps = r; L.dlE1rm = Math.round(epley(w, r) * 10) / 10;
+          L.week = currentWeek();
           S.logs[t] = L;
           const suggested = round25(L.dlE1rm * 0.97);
           if (suggested > (S.profile.dlTm || 0)) {
@@ -1100,6 +1104,27 @@ function renderToday() {
     }
   }
   root.appendChild(wo);
+
+  /* 週の進行(実施ベース・日付に依存しない) */
+  if (session.type === "day1" || session.type === "day2" || session.type === "test") {
+    const wc = el("div", "card");
+    wc.innerHTML = `<h2>プログラムの進行 <span class="sub">実施ベース</span></h2>`;
+    wc.appendChild(el("p", "muted", `現在 <b style="color:var(--series-1)">第${session.week}週 / 18週</b>。1週分(Day1+Day2)をやり終えたら下のボタンで次の週へ進む。<strong>岡山やお盆で行けなかった週は押さなければOK</strong>——飛ばした分だけプログラムが待ってくれる。`));
+    const brow = el("div", "btn-row");
+    brow.style.marginTop = "10px";
+    const nextLabel = session.week >= 18 ? "🏆 挑戦へ" : `第${session.week}週 完了 → 次の週へ`;
+    const adv = el("button", "btn small", "✅ " + nextLabel);
+    adv.onclick = () => {
+      if (session.week >= 19) return;
+      if (confirm(`第${session.week}週を完了して第${Math.min(19, session.week+1)}週に進みます。よろしいですか?\n(Day2まで終えてから押すのがおすすめ)`)) { advanceWeek(todayISO()); renderAll(); window.scrollTo(0,0); }
+    };
+    const bk = el("button", "btn small secondary", "◀ 1週戻す");
+    bk.style.flex = "0 0 auto";
+    bk.onclick = () => { rewindWeek(); renderAll(); };
+    brow.appendChild(adv); brow.appendChild(bk);
+    wc.appendChild(brow);
+    root.appendChild(wc);
+  }
 
   /* リカバリーカード */
   if (session.type !== "pre" && session.type !== "post") {
@@ -1179,20 +1204,19 @@ function renderProgram() {
     <div class="tile"><div class="label">目標</div><div class="value">${S.profile.goal}<small> kg</small></div><div class="delta">${curWk >= 1 && curWk <= 18 ? `第${curWk}週 / 18週` : "開始前"}</div></div>`;
   root.appendChild(head);
 
-  const homeDay = (S.profile.benchDay + 1) % 7;
+  const d1 = S.profile.day1, d2 = S.profile.day2;
   const card = el("div", "card");
-  card.innerHTML = `<h2>18週間ロードマップ <span class="sub">ジム: ${WD[S.profile.benchDay]}曜 ・ 自宅: ${WD[homeDay]}曜</span></h2>`;
+  card.innerHTML = `<h2>18週間ロードマップ <span class="sub">Day1(ベンチ): ${WD[d1]}曜 / Day2(デッド+脚): ${WD[d2]}曜</span></h2>`;
   BLOCKS.forEach(b => {
     card.appendChild(el("div", "block-head", `${b.name.toUpperCase()} — ${b.desc}`));
     for (let w = b.range[0]; w <= b.range[1]; w++) {
       const plan = WEEK_PLAN[w];
       const row = el("div", "week-row" + (w === curWk ? " current" : ""));
-      const startD = fmtISO(new Date(parseISO(S.profile.startDate).getTime() + (w-1) * 7 * DAY));
       const dlp = DL_PLAN[w];
-      const topW = plan.test ? "" : `ベンチ ${round25(tm * plan.top.pct)}kg${dlp ? " ・DL " + round25((S.profile.dlTm||125) * dlp.top.pct) + "kg" : ""}`;
+      const topW = plan.test ? "🏆 ベンチ125挑戦" : `ベンチ ${round25(tm * plan.top.pct)}kg${dlp ? " ・DL " + round25((S.profile.dlTm||125) * dlp.top.pct) + "kg" : ""}`;
       row.innerHTML = `
         <span class="wk">W${w}</span>
-        <span class="wk-info"><span class="wk-name">${esc(plan.label)}</span><br><span class="wk-detail">${fmtJP(startD)}週 ${topW ? "・" + topW : ""}${plan.deload ? " ・回復週" : ""}</span></span>
+        <span class="wk-info"><span class="wk-name">${esc(plan.label)}</span><br><span class="wk-detail">${topW}${plan.deload ? " ・回復週" : ""}</span></span>
         <span class="wk-status">${w < curWk ? "✓" : w === curWk ? "▶" : ""}</span>`;
       card.appendChild(row);
     }
@@ -1201,9 +1225,11 @@ function renderProgram() {
 
   const note = el("div", "card coach-card");
   note.innerHTML = `<h2>このプログラムの考え方</h2>
-    <p><strong>週1のジム(ベンチ→デッド)+週1の自宅フル(肩・背中・前腕をまとめて1日)</strong>で組んである。固定休の2日に集中させて、シフトが読めない他の曜日は完全フリーにしてある。ベンチ日はトップセットとバックオフの2段構え、その後にデッドリフト。デッドはW12まで伸ばし、ピーキングに入ったら維持に切り替えてベンチの回復に全てを注ぐ。</p>
-    <p>重量は毎回のコンディションスコアで自動調整される。<strong>数字はあくまで提案</strong>——バーの速度が明らかに遅い日は自分でも下げてOK。逆に記録を入れると推定MAXからTMが自動で上がっていく。</p>
-    <p>4週・10週・17週は意図的に軽い回復週。<strong>飛ばさないこと。</strong>ここで超回復が起きる。</p>`;
+    <p><strong>週2ジム・連続2日でOK。</strong>Day1=ベンチの日(押す:胸・肩・三頭)、Day2=デッド+脚の日(引く+下半身)。使う筋肉が被らないから、木・金のような連続2日でも回復的に問題ない。ベンチ125が最優先、デッドは丁寧に伸ばし、脚はレッグプレスで支える。</p>
+    <p><strong>週の進行は「実施ベース」。</strong>カレンダーではなく、1週分をやり終えて「完了」を押すたびに次の週へ進む。<strong>岡山(月1)やお盆(月2)で行けない週は押さなければいいだけ</strong>——飛ばした分だけプログラムが待つから、休みが多い月もズレない。罪悪感ゼロで休んでOK。</p>
+    <p><strong>脚のプレート事情。</strong>20kg×12枚(最大240kg)までなので、レッグプレスは重さより高回数・止め・スローで効かせる設計。頭打ちになったら片脚に切り替えて強度を上げる。</p>
+    <p>重量は毎回のコンディションスコアで自動調整。<strong>数字は提案</strong>——バーの速度が遅い日は自分で下げてOK。記録を入れると推定MAXからTMが自動で上がる。</p>
+    <p>4週・10週・17週は意図的な回復週。<strong>飛ばさないこと。</strong>ここで超回復が起きる。もし岡山週とうまく重なればラッキー、丸ごと休んで大丈夫。</p>`;
   root.appendChild(note);
 }
 
@@ -1256,7 +1282,7 @@ function renderProgress() {
   // weekly volume (bench sets completed × approx)
   const volByWeek = {};
   Object.entries(S.logs).forEach(([d, l]) => {
-    const wk = weekOf(d);
+    const wk = l.week || 0;
     if (wk < 1 || wk > 18) return;
     let sets = 0;
     if (l.sets) Object.values(l.sets).forEach(arr => sets += arr.filter(Boolean).length);
@@ -1320,13 +1346,17 @@ function renderSettings() {
   root.appendChild(fb);
 
   const prof = el("div", "card");
+  const dayOpts = sel => [1,2,3,4,5,6,0].map(d=>`<option value="${d}" ${sel===d?"selected":""}>${WD[d]}曜日</option>`).join("");
   prof.innerHTML = `<h2>プロフィール・プログラム設定</h2>
-    <label class="field"><span class="fl">トレーニングマックス TM (kg)</span><input type="number" id="set-tm" step="2.5" value="${S.profile.tm}" inputmode="decimal"></label>
+    <label class="field"><span class="fl">ベンチ トレーニングマックス TM (kg)</span><input type="number" id="set-tm" step="2.5" value="${S.profile.tm}" inputmode="decimal"></label>
     <label class="field"><span class="fl">目標 (kg)</span><input type="number" id="set-goal" step="2.5" value="${S.profile.goal}" inputmode="decimal"></label>
     <label class="field"><span class="fl">デッドリフトTM (kg)</span><input type="number" id="set-dltm" step="2.5" value="${S.profile.dlTm || 125}" inputmode="decimal"></label>
-    <label class="field"><span class="fl">ベンチの曜日</span><select id="set-day">${[1,2,3,4,5,6,0].map(d=>`<option value="${d}" ${S.profile.benchDay===d?"selected":""}>${WD[d]}曜日</option>`).join("")}</select></label>
-    <label class="field"><span class="fl">開始日</span><input type="date" id="set-start" value="${S.profile.startDate}"></label>
-    <button class="btn secondary" id="save-prof">設定を保存</button>`;
+    <label class="field"><span class="fl">Day1 ベンチの日(曜日)</span><select id="set-day1">${dayOpts(S.profile.day1)}</select></label>
+    <label class="field"><span class="fl">Day2 デッド+脚の日(曜日)</span><select id="set-day2">${dayOpts(S.profile.day2)}</select></label>
+    <label class="field"><span class="fl">現在のプログラム週 (1〜18)</span><input type="number" id="set-week" min="1" max="18" step="1" value="${currentWeek()}" inputmode="numeric"></label>
+    <label class="field"><span class="fl">開始日(記録用・進行には影響しません)</span><input type="date" id="set-start" value="${S.profile.startDate||""}"></label>
+    <button class="btn secondary" id="save-prof">設定を保存</button>
+    <p class="small-note">Day1とDay2は連続した2日でOK(例: 木・金)。使う筋肉が違うので連日でも回復に問題ありません。週の進行は「今日」タブの完了ボタンで手動なので、休みが多くてもズレません。</p>`;
   root.appendChild(prof);
 
   const data = el("div", "card");
@@ -1359,7 +1389,10 @@ function renderSettings() {
     S.profile.tm = parseFloat($("#set-tm").value) || S.profile.tm;
     S.profile.goal = parseFloat($("#set-goal").value) || S.profile.goal;
     S.profile.dlTm = parseFloat($("#set-dltm").value) || S.profile.dlTm;
-    S.profile.benchDay = parseInt($("#set-day").value);
+    S.profile.day1 = parseInt($("#set-day1").value);
+    S.profile.day2 = parseInt($("#set-day2").value);
+    const wkIn = parseInt($("#set-week").value);
+    if (wkIn >= 1 && wkIn <= 18) { if (!S.progress) S.progress = { week: 1, history: [] }; S.progress.week = wkIn; }
     S.profile.startDate = $("#set-start").value || S.profile.startDate;
     save(); alert("保存しました"); renderAll();
   };
@@ -1407,26 +1440,47 @@ document.querySelectorAll("nav.tabbar button").forEach(b => {
   const d = new Date();
   $("#today-date").textContent = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日(${WD[d.getDay()]})`;
   if (!Store.usable) $("#storage-banner").style.display = "block";
-  if (S.profile && !S.profile.dlTm) { S.profile.dlTm = 125; save(); } // v1→v2移行
+  /* ---- データ移行 ---- */
+  if (S.profile) {
+    if (!S.profile.dlTm) S.profile.dlTm = 125;                 // v1→v2
+    // v2→v3: 週1(benchDay) → 週2(day1/day2)へ
+    if (S.profile.day1 === undefined) {
+      const bd = (S.profile.benchDay !== undefined) ? S.profile.benchDay : 4;
+      S.profile.day1 = bd;
+      S.profile.day2 = (bd + 1) % 7; // 連続した翌日をデッド+脚の日に
+    }
+    if (!S.progress) {
+      // 旧・日付ベースの週を引き継いで実施ベースに変換
+      let seed = 1;
+      if (S.profile.startDate) {
+        const diff = Math.floor((parseISO(todayISO()) - parseISO(S.profile.startDate)) / DAY);
+        seed = Math.min(18, Math.max(1, Math.floor(diff / 7) + 1));
+      }
+      S.progress = { week: seed, history: [] };
+    }
+    save();
+  }
   if (!S.profile) {
     // onboarding
     const ob = $("#onboard");
     ob.classList.add("show");
-    // default start: next Monday
-    const nd = new Date();
-    const daysToMon = (8 - nd.getDay()) % 7 || 7;
-    $("#ob-start").value = fmtISO(new Date(nd.getTime() + daysToMon * DAY));
+    $("#ob-start").value = todayISO();
     $("#ob-go").onclick = () => {
       const mx = parseFloat($("#ob-max").value) || 110;
       const dlmx = parseFloat($("#ob-dlmax").value) || 130;
+      const d1 = parseInt($("#ob-day1").value);
+      let d2 = parseInt($("#ob-day2").value);
+      if (d2 === d1) d2 = (d1 + 1) % 7; // 同じ曜日を選んだら翌日に
       S.profile = {
         maxStart: mx,
         goal: parseFloat($("#ob-goal").value) || 125,
-        benchDay: parseInt($("#ob-day").value),
+        day1: d1,
+        day2: d2,
         startDate: $("#ob-start").value || todayISO(),
         tm: round25(mx * 0.97),
         dlTm: round25(dlmx * 0.97)
       };
+      S.progress = { week: 1, history: [] };
       save();
       ob.classList.remove("show");
       renderAll();
