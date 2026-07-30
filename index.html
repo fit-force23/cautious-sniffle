@@ -1493,6 +1493,10 @@ document.querySelectorAll("nav.tabbar button").forEach(b => {
     // 自動同期ファイルがあれば起動時に静かに読み込む
     loadOuraJson().then(n => { if (n) renderToday(); }).catch(() => {});
   }
+  // Service Worker登録(PWA正式インストール + オフライン対応)
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  }
 })();
 </script>
 </body>
