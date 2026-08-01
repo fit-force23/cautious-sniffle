@@ -335,7 +335,7 @@ const Store = (() => {
 /* ---------- state ---------- */
 const DEFAULTS = {
   profile: null, // {maxStart, goal, day1, day2, startDate, tm, dlTm}
-  progress: { week: 1, history: [] }, // 実施ベースの週カウンター(日付に依存しない)
+  progress: { week: 1, history: [], solo: false }, // 実施ベースの週カウンター(日付に依存しない)。solo=今週はDay1だけ
   logs: {},      // dateISO -> {sets:{exIdx:[bool,...]}, topWeight, topReps, e1rm, note}
   condition: {}, // dateISO -> {score, src, readiness, sleepScore, hrv, rhr, subjective}
   tokens: { oura: "", fitbit: "" },
@@ -471,20 +471,35 @@ function currentWeek() {
 /* 後方互換: 日付ではなく現在の進捗週を返す */
 function weekOf(dateISO) { return currentWeek(); }
 
+/* 週1だけの週(soloモード): Day1にデッドのトップセットだけ差し込む */
+function isSoloWeek() { return !!(S.progress && S.progress.solo); }
+function setSoloWeek(v) {
+  if (!S.progress) S.progress = { week: 1, history: [], solo: false };
+  S.progress.solo = !!v;
+  save();
+}
+
 /* 週を進める / 戻す(岡山・お盆で飛んでも、実施した分だけ進む) */
 function advanceWeek(dateISO) {
   if (!S.progress) S.progress = { week: 1, history: [] };
   if (S.progress.week >= 19) return;
   S.progress.history = S.progress.history || [];
-  S.progress.history.push({ week: S.progress.week, done: dateISO || todayISO() });
+  S.progress.history.push({ week: S.progress.week, done: dateISO || todayISO(), solo: !!S.progress.solo });
   S.progress.week = Math.min(19, S.progress.week + 1);
+  S.progress.solo = false; // 週が変われば解除
   save();
 }
 function rewindWeek() {
   if (!S.progress) S.progress = { week: 1, history: [] };
   S.progress.week = Math.max(1, (S.progress.week || 1) - 1);
   if (S.progress.history && S.progress.history.length) S.progress.history.pop();
+  S.progress.solo = false;
   save();
+}
+/* 直近3週のうち何週が「週1だけ」だったか(連続すると総ボリュームが足りなくなる) */
+function recentSoloCount() {
+  const h = (S.progress && S.progress.history) || [];
+  return h.slice(-3).filter(x => x && x.solo).length;
 }
 
 /* その日のセッションを決定(週2: Day1=ベンチ / Day2=デッド+脚) */
@@ -532,7 +547,27 @@ function buildDay1(wk, dateISO) {
     note: "ボリュームの主役。丁寧に同じフォームで"
   });
   day1Accessories(wk).forEach(a => ex.push({ name: a.name, detail: () => a.detail(pct), note: a.note }));
-  return { type: "day1", title: `Day1 ベンチの日`, week: wk, exercises: ex, plan };
+  /* 週1だけの週: デッドのトップセットだけ最後に足して、脚も最低限だけ拾う */
+  const solo = isSoloWeek();
+  if (solo) {
+    const dl = DL_PLAN[wk];
+    const dtm = S.profile.dlTm || 125;
+    const dpct = p => round25(dtm * p);
+    if (dl) {
+      ex.push({
+        name: "デッドリフト トップセット(週1補完)", key: "dl-top",
+        detail: () => `${dl.top.sets}セット × ${dl.top.reps}回 @ ${dpct(dl.top.pct)}kg`,
+        weight: dpct(dl.top.pct), reps: dl.top.reps, sets: dl.top.sets,
+        note: "今週はこの1日だけ。バックオフは省略してトップセットだけ獲る。腰が丸まる感覚があれば即中止でOK"
+      });
+    }
+    ex.push({
+      name: "レッグプレス(週1補完・最低限)",
+      detail: () => "2セット × 15〜20回(1秒止め)",
+      note: "脚を完全に捨てないための保険。余力がなければ飛ばしてOK。プレートは20kg×12枚まで"
+    });
+  }
+  return { type: "day1", title: solo ? `Day1 ベンチの日(週1モード)` : `Day1 ベンチの日`, week: wk, exercises: ex, plan, solo };
 }
 
 /* Day2: デッド+脚の日(引く+下半身) */
@@ -608,24 +643,24 @@ function adjustment(score) {
   return { zone: "low", label: "要回復", color: "var(--status-critical)", icon: "■", pct: -0.125, setDelta: -2 };
 }
 
-/* リカバリーメニュー (A-wear / リリースガン) */
+/* リカバリーメニュー (リリースガン中心のセルフケア) */
 function recoveryMenu(session, adj) {
   const zone = adj ? adj.zone : "none";
   if (session.type === "test") return [
-    { name: "A-wear Work(5分)のみ", detail: "挑戦前は強い刺激を入れない。整えるだけにする", when: "前夜〜当日" }
+    { name: "動的ストレッチ(5分)のみ", detail: "肩回し・胸ひらき・股関節。挑戦前は強い刺激を入れず、可動域を出すだけにする", when: "前夜〜当日" }
   ];
   const items = [];
   if (session.type === "day1") {
-    items.push({ name: "A-wear Work(5分)", detail: "ウォームアップの最初に。装着したままセットに入ってOK", when: "トレ前" });
+    items.push({ name: "肩・胸の動的ストレッチ(5分)", detail: "肩甲骨回し→胸ひらき→バーだけベンチ。ウォームアップの最初に", when: "トレ前" });
     items.push({ name: "リリースガン: 胸・三頭・肩", detail: "各90秒、イタ気持ちいい強さ。翌日の張りが変わる", when: "トレ後" });
     items.push({ name: "リリースガン: 腰まわりを軽く", detail: "明日のデッドに備えて腰・お尻を各60秒ほぐす", when: "夜" });
   } else if (session.type === "day2") {
-    items.push({ name: "A-wear Work(5分)", detail: "デッドのウォームアップ前に。腰・ハムを起こす", when: "トレ前" });
+    items.push({ name: "股関節・ハムの動的ストレッチ(5分)", detail: "ヒップヒンジ素振り→グッドモーニング(バーのみ)。腰とハムを起こしてからデッドへ", when: "トレ前" });
     items.push({ name: "リリースガン: 脚・お尻・ハム", detail: "レッグプレスとデッド後の下半身に各90秒", when: "トレ後" });
     items.push({ name: "リリースガン: 前腕・広背筋", detail: "デッドとデッドハングの後は前腕が張りやすい。各60秒", when: "夜" });
   } else if (session.type === "rest") {
     items.push({ name: "リリースガン: 全身軽く", detail: "胸・背中・脚を各60秒、血流を回す日", when: "いつでも" });
-    items.push({ name: "A-wear 日中装着", detail: "デスクワークや移動のあいだに", when: "日中" });
+    items.push({ name: "寝る前ストレッチ(5分)", detail: "胸・股関節・ふくらはぎ。副交感神経を上げて睡眠スコアを稼ぐ", when: "夜" });
   }
   if (zone === "low" || zone === "caution") {
     items.push({ name: "🛌 リカバリー強化モード", detail: "リリースガン10分+いつもより30分早く布団へ。明日のスコアで答え合わせしよう", when: "夜" });
@@ -649,7 +684,8 @@ function coachMessage(session, cond, adj) {
     else if (adj.zone === "caution") msgs.push(`回復が追いついていない。今日は<strong>重量を5%下げ、セットを1つ減らした</strong>。軽い日に丁寧に積むのが、結局いちばん強くなる。`);
     else if (adj.zone === "low") msgs.push(`<strong>今日は無理をしない日。</strong>重量を12.5%落としてフォーム練習に切り替えた。それでもキツければ完全休養に。1回のワークアウトより継続が125kgを作る。`);
     else msgs.push(`朝のコンディションを入力(または同期)すると、今日の重量を自動調整するよ。`);
-    msgs.push("<strong>Day1はベンチ最優先の日。</strong>トップ→バックオフでベンチに全力。そのあと肩・三頭を足して押す力を底上げする。明日のDay2(デッド+脚)に響かせないため、補助は追い込みすぎない。");
+    if (session.solo) msgs.push("<strong>今週は週1モード。</strong>ベンチが最優先だからDay1をやるのが正解。最後にデッドのトップセット1本と脚を足してある——バックオフは切り捨てていい。ベンチのトップセットさえ計画通り挙がれば、この週は成立してる。");
+    else msgs.push("<strong>Day1はベンチ最優先の日。</strong>トップ→バックオフでベンチに全力。そのあと肩・三頭を足して押す力を底上げする。明日のDay2(デッド+脚)に響かせないため、補助は追い込みすぎない。");
     if (blk) msgs.push(`現在は<strong>${blk.name}</strong>(${blk.desc})。第${wk}週/18週。`);
   }
   if (session.type === "day2") {
@@ -982,6 +1018,19 @@ function renderToday() {
   coachMessage(session, cond, adj).forEach(m => coach.appendChild(el("p", "", m)));
   root.appendChild(coach);
 
+  /* 週1モードの切り替え(Day1のみ) */
+  if (session.type === "day1") {
+    const sc = el("div", "card");
+    sc.innerHTML = `<h2>今週のジム回数 <span class="sub">週1になった時はこっち</span></h2>`;
+    sc.appendChild(el("p", "muted", session.solo
+      ? `<b style="color:var(--series-1)">週1モード:ON</b> — 明日のDay2に行けない前提で、<strong>デッドのトップセット1本</strong>とレッグプレスを今日のメニューの最後に足してある。終わったら下の「✅ 完了 → 次の週へ」を押してOK。`
+      : `明日のDay2に行けそうにない週は、ここをONにする。<strong>ベンチは最優先なのでDay1をやる</strong>のが正解。ONにするとデッドのトップセット1本と脚を今日のメニューに足して、1日で最低限を回収する。`));
+    const sbtn = el("button", "btn small" + (session.solo ? "" : " secondary"), session.solo ? "✓ 週1モード ON(タップで解除)" : "今週はDay1だけ(週1モードON)");
+    sbtn.onclick = () => { setSoloWeek(!session.solo); renderToday(); window.scrollTo(0, 0); };
+    sc.appendChild(sbtn);
+    root.appendChild(sc);
+  }
+
   /* ワークアウトカード */
   const wo = el("div", "card");
   const wk = session.week;
@@ -1067,8 +1116,8 @@ function renderToday() {
       if (log.e1rm) recWrap.appendChild(el("p", "small-note", `本日の推定1RM: <b>${log.e1rm}kg</b> ${log.e1rm >= S.profile.goal ? "🎉 目標到達レベル!" : `(目標まであと ${Math.max(0, Math.round((S.profile.goal - log.e1rm)*10)/10)}kg)`}`));
       wo.appendChild(recWrap);
     }
-    /* デッドリフト記録 (Day2) */
-    if (session.type === "day2") {
+    /* デッドリフト記録 (Day2 / 週1モードのDay1) */
+    if (session.type === "day2" || (session.type === "day1" && session.solo)) {
       const div2 = el("div", "divider");
       wo.appendChild(div2);
       const log = S.logs[t] || {};
@@ -1112,14 +1161,22 @@ function renderToday() {
   if (session.type === "day1" || session.type === "day2" || session.type === "test") {
     const wc = el("div", "card");
     wc.innerHTML = `<h2>プログラムの進行 <span class="sub">実施ベース</span></h2>`;
-    wc.appendChild(el("p", "muted", `現在 <b style="color:var(--series-1)">第${session.week}週 / 18週</b>。1週分(Day1+Day2)をやり終えたら下のボタンで次の週へ進む。<strong>岡山やお盆で行けなかった週は押さなければOK</strong>——飛ばした分だけプログラムが待ってくれる。`));
+    wc.appendChild(el("p", "muted", `現在 <b style="color:var(--series-1)">第${session.week}週 / 18週</b>。1週分をやり終えたら下のボタンで次の週へ進む。`));
+    wc.appendChild(el("p", "muted", `<strong>ジムに2回行けた週</strong> → Day2のあとに ✅ を押す。<br><strong>1回だけだった週</strong> → 上の「週1モード」でDay1をやって ✅ を押す。ベンチのトップセットが計画通り挙がっていれば、その週は成立。<br><strong>1回も行けなかった週</strong>(岡山・お盆) → ✅ を押さない。飛ばした分だけプログラムが待ってくれる。`));
+    if (recentSoloCount() >= 2) {
+      wc.appendChild(el("p", "small-note", `⚠️ 直近3週のうち${recentSoloCount()}週が「週1」だった。総ボリュームが足りずTMだけ先に進むと伸び悩む。<strong>◀ 1週戻す</strong>で同じ週をもう一度やるのが安全。`));
+    }
+    if (session.type === "day1" && !session.solo) {
+      wc.appendChild(el("p", "small-note", "ベンチのトップセットが規定回数に届かなかった週は、Day2をやったかどうかに関係なく ◀ 1週戻す で同じ週をやり直すほうが伸びる。"));
+    }
     const brow = el("div", "btn-row");
     brow.style.marginTop = "10px";
     const nextLabel = session.week >= 18 ? "🏆 挑戦へ" : `第${session.week}週 完了 → 次の週へ`;
     const adv = el("button", "btn small", "✅ " + nextLabel);
     adv.onclick = () => {
       if (session.week >= 19) return;
-      if (confirm(`第${session.week}週を完了して第${Math.min(19, session.week+1)}週に進みます。よろしいですか?\n(Day2まで終えてから押すのがおすすめ)`)) { advanceWeek(todayISO()); renderAll(); window.scrollTo(0,0); }
+      const hint = session.solo ? "(週1モード:今日のDay1で1週分としてカウントされます)" : "(Day2まで終えてから押すのがおすすめ)";
+      if (confirm(`第${session.week}週を完了して第${Math.min(19, session.week+1)}週に進みます。よろしいですか?\n${hint}`)) { advanceWeek(todayISO()); renderAll(); window.scrollTo(0,0); }
     };
     const bk = el("button", "btn small secondary", "◀ 1週戻す");
     bk.style.flex = "0 0 auto";
@@ -1134,7 +1191,7 @@ function renderToday() {
     const rec = recoveryMenu(session, adj);
     if (rec.length) {
       const rc = el("div", "card");
-      rc.innerHTML = `<h2>リカバリー <span class="sub">A-wear & リリースガン</span></h2>`;
+      rc.innerHTML = `<h2>リカバリー <span class="sub">リリースガン & セルフケア</span></h2>`;
       const log = S.logs[t] || {};
       rec.forEach((r, i) => {
         const row = el("div", "exercise");
@@ -1230,6 +1287,7 @@ function renderProgram() {
   note.innerHTML = `<h2>このプログラムの考え方</h2>
     <p><strong>週2ジム・連続2日でOK。</strong>Day1=ベンチの日(押す:胸・肩・三頭)、Day2=デッド+脚の日(引く+下半身)。使う筋肉が被らないから、木・金のような連続2日でも回復的に問題ない。ベンチ125が最優先、デッドは丁寧に伸ばし、脚はレッグプレスで支える。</p>
     <p><strong>週の進行は「実施ベース」。</strong>カレンダーではなく、1週分をやり終えて「完了」を押すたびに次の週へ進む。<strong>岡山(月1)やお盆(月2)で行けない週は押さなければいいだけ</strong>——飛ばした分だけプログラムが待つから、休みが多い月もズレない。罪悪感ゼロで休んでOK。</p>
+    <p><strong>週1回しか行けなかった週は「Day1(ベンチ)」をやる。</strong>ベンチ125が最優先だから、削るのはデッドと脚のほう。Day1画面の<strong>「週1モード」</strong>をONにすると、デッドのトップセット1本と最低限の脚が今日のメニューに追加される。それで1週分としてカウントしてOK——ただし週1が2〜3週続いたらボリューム不足なので、1週戻して同じ週をやり直すのが安全。</p>
     <p><strong>脚のプレート事情。</strong>20kg×12枚(最大240kg)までなので、レッグプレスは重さより高回数・止め・スローで効かせる設計。頭打ちになったら片脚に切り替えて強度を上げる。</p>
     <p>重量は毎回のコンディションスコアで自動調整。<strong>数字は提案</strong>——バーの速度が遅い日は自分で下げてOK。記録を入れると推定MAXからTMが自動で上がる。</p>
     <p>4週・10週・17週は意図的な回復週。<strong>飛ばさないこと。</strong>ここで超回復が起きる。もし岡山週とうまく重なればラッキー、丸ごと休んで大丈夫。</p>`;
