@@ -1,5 +1,5 @@
-/* BENCH125 Service Worker — PWAとして正式インストール可能にする + オフライン対応 */
-const CACHE = "bench125-v12";
+/* OVERLOAD Service Worker — PWAとして正式インストール可能にする + オフライン対応 */
+const CACHE = "overload-v14";
 const CORE = ["./", "index.html", "manifest.json", "icon-192.png", "icon-512.png", "icon-180.png"];
 
 self.addEventListener("install", e => {
