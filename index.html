@@ -609,14 +609,22 @@ function buildDay2(wk, dateISO) {
    コンディションエンジン
    Oura(レディネス/睡眠/HRV/RHR) + Fitbit(HRV/RHR/睡眠) + 主観
 ================================================================ */
+/* 日付順に並べてから直近14日分。Object.valuesの順序に頼ると
+   同期のたびに基準がぶれるので、必ずキー(YYYY-MM-DD)でソートする */
+function recentVals(field, n) {
+  const vals = Object.keys(S.condition).sort()
+    .map(d => S.condition[d] && S.condition[d][field])
+    .filter(v => v > 0);
+  return vals.slice(-(n || 14));
+}
 function hrvBaseline() {
-  const vals = Object.values(S.condition).map(c => c.hrv).filter(v => v > 0).slice(-14);
-  if (!vals.length) return null;
+  const vals = recentVals("hrv", 14);
+  if (vals.length < 3) return null;   // 3日分たまるまでは判定しない
   return vals.reduce((a,b)=>a+b,0) / vals.length;
 }
 function rhrBaseline() {
-  const vals = Object.values(S.condition).map(c => c.rhr).filter(v => v > 0).slice(-14);
-  if (!vals.length) return null;
+  const vals = recentVals("rhr", 14);
+  if (vals.length < 3) return null;
   return vals.reduce((a,b)=>a+b,0) / vals.length;
 }
 
@@ -626,12 +634,15 @@ function computeScore(c) {
   if (c.sleepScore > 0) parts.push({ v: c.sleepScore, w: 2 });
   const hb = hrvBaseline(), rb = rhrBaseline();
   if (c.hrv > 0 && hb) {
-    const ratio = c.hrv / hb; // 1.0 = baseline
-    parts.push({ v: Math.max(0, Math.min(100, 50 + (ratio - 1) * 250)), w: 2 });
+    const ratio = c.hrv / hb;               // 1.0 = 平常
+    const dev = ratio - 1;
+    const eff = Math.abs(dev) < 0.07 ? 0 : (dev > 0 ? dev - 0.07 : dev + 0.07); // ±7%は誤差として無視
+    parts.push({ v: Math.max(0, Math.min(100, 75 + eff * 130)), w: 2 });
   }
   if (c.rhr > 0 && rb) {
-    const diff = c.rhr - rb; // 高い=悪い
-    parts.push({ v: Math.max(0, Math.min(100, 70 - diff * 8)), w: 1.5 });
+    const diff = c.rhr - rb;                // 高い = 悪い
+    const eff = Math.abs(diff) < 1.5 ? 0 : (diff > 0 ? diff - 1.5 : diff + 1.5); // ±1.5bpmは誤差
+    parts.push({ v: Math.max(0, Math.min(100, 75 - eff * 6)), w: 1.5 });
   }
   if (c.subjective > 0) parts.push({ v: c.subjective, w: 1.5 });
   if (!parts.length) return null;
@@ -861,6 +872,8 @@ async function loadOuraJson() {
     const c = S.condition[day] || {};
     if (v.readiness) c.readiness = v.readiness;
     if (v.sleepScore) c.sleepScore = v.sleepScore;
+    if (v.hrv) c.hrv = v.hrv;
+    if (v.rhr) c.rhr = v.rhr;
     c.src = (c.src || "").includes("oura") ? c.src : ((c.src ? c.src + "+" : "") + "oura");
     S.condition[day] = c; n++;
   });
@@ -885,9 +898,13 @@ async function syncOura() {
     if (!r.ok) throw new Error("Oura APIエラー: " + r.status);
     return (await r.json()).data || [];
   };
-  let readiness, sleep;
+  let readiness, sleep, sleepRaw;
   try {
-    [readiness, sleep] = await Promise.all([get("daily_readiness"), get("daily_sleep")]);
+    [readiness, sleep, sleepRaw] = await Promise.all([
+      get("daily_readiness"),
+      get("daily_sleep"),
+      get("sleep").catch(() => [])
+    ]);
   } catch (e) {
     // 直接アクセスがブロックされた場合(CORS等) → 自動同期ファイルにフォールバック
     try { return await loadOuraJson(); }
@@ -909,6 +926,21 @@ async function syncOura() {
     const day = rec.day;
     const c = S.condition[day] || {};
     c.sleepScore = rec.score || c.sleepScore || 0;
+    S.condition[day] = c;
+  });
+  /* 生のHRV・最低心拍。1日に複数の睡眠があれば一番長いものを採用 */
+  const mainSleep = {};
+  (sleepRaw || []).forEach(rec => {
+    const day = rec.day;
+    if (!day) return;
+    const dur = rec.total_sleep_duration || 0;
+    if (!mainSleep[day] || dur > (mainSleep[day].total_sleep_duration || 0)) mainSleep[day] = rec;
+  });
+  Object.keys(mainSleep).forEach(day => {
+    const rec = mainSleep[day];
+    const c = S.condition[day] || {};
+    if (rec.average_hrv) c.hrv = rec.average_hrv;
+    if (rec.lowest_heart_rate) c.rhr = rec.lowest_heart_rate;
     S.condition[day] = c;
   });
   // 各日のスコア再計算
