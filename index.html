@@ -203,6 +203,27 @@ nav.tabbar button.active { color: var(--series-1); }
 .sync-status.ok { color: var(--good-text); }
 .sync-status.err { color: var(--status-critical); }
 .divider { height: 1px; background: var(--grid); margin: 14px 0; }
+/* インターバルタイマー */
+.rest-timer { position: fixed; left: 10px; right: 10px; bottom: 72px; z-index: 90;
+  background: var(--surface-2); border: 1px solid var(--series-1); border-radius: var(--radius);
+  padding: 10px 12px; display: flex; align-items: center; gap: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.6); }
+.rest-timer .rt-l { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rest-timer .rt-lab { font-size: .68rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rest-timer .rt-num { font-size: 1.6rem; font-weight: 700; line-height: 1.1; color: var(--series-1);
+  font-variant-numeric: tabular-nums; }
+.rest-timer.ring { border-color: var(--status-good); }
+.rest-timer.ring .rt-num { color: var(--status-good); }
+.rest-timer .rt-b { background: var(--page); border: 1px solid var(--grid); color: var(--text-secondary);
+  border-radius: 10px; padding: 9px 11px; font-size: .78rem; font-family: inherit; cursor: pointer; flex: 0 0 auto; }
+.rest-timer .rt-b:active { background: var(--grid); }
+/* 結果ボタン(未達/規定通り/余裕) */
+.res-row { display: flex; gap: 6px; margin-top: 8px; }
+.res-row button { flex: 1; background: var(--page); border: 1px solid var(--grid); color: var(--text-secondary);
+  border-radius: 10px; padding: 8px 4px; font-size: .74rem; font-family: inherit; cursor: pointer; }
+.res-row button.on { background: var(--series-1-dim); border-color: var(--series-1); color: #fff; font-weight: 700; }
+.wu-step { font-size: .82rem; color: var(--text-secondary); line-height: 1.7; }
+.wu-step b { color: var(--text-primary); }
 .banner {
   background: var(--surface-2); border: 1px solid var(--status-warning);
   border-radius: 12px; padding: 10px 14px; font-size: 0.8rem;
@@ -339,10 +360,23 @@ const DEFAULTS = {
   logs: {},      // dateISO -> {sets:{exIdx:[bool,...]}, topWeight, topReps, e1rm, note}
   condition: {}, // dateISO -> {score, src, readiness, sleepScore, hrv, rhr, subjective}
   tokens: { oura: "", fitbit: "" },
+  weights: {},   // dateISO -> kg
+  settings: { timerAuto: true, timerSound: true },
   baseline: { hrv: null, rhr: null } // rolling baselines
 };
 let S = Store.get("bench125", null) || JSON.parse(JSON.stringify(DEFAULTS));
 function save() { Store.set("bench125", S); }
+/* 古い保存データ・古いバックアップでも壊れないように入れ物を補う */
+function migrate() {
+  if (!S.weights) S.weights = {};                     // dateISO -> kg
+  if (!S.logs) S.logs = {};
+  if (!S.condition) S.condition = {};
+  if (!S.tokens) S.tokens = { oura: "", fitbit: "" };
+  if (!S.settings) S.settings = {};
+  if (S.settings.timerAuto === undefined) S.settings.timerAuto = true;
+  if (S.settings.timerSound === undefined) S.settings.timerSound = true;
+}
+migrate();
 
 /* ---------- date utils ---------- */
 const DAY = 86400000;
@@ -603,6 +637,265 @@ function buildDay2(wk, dateISO) {
   const fl = abFlexion(wk);
   if (fl) ex.push({ name: fl.name, key: "abflex", detail: () => fl.detail, note: fl.note });
   return { type: "day2", title: `Day2 デッド+脚の日`, week: wk, exercises: ex, plan: dl };
+}
+
+/* ================================================================
+   インターバルタイマー
+   セット間の休憩は「体感」でやると必ず短くなる。短いと同じ重量でも
+   挙がる回数が落ちるので、種目ごとに適正秒数を持たせて自動で計る。
+================================================================ */
+function fmtSec(s) { const m = Math.floor(s / 60), r = s % 60; return r ? `${m}:${String(r).padStart(2,"0")}` : `${m}分`; }
+function restSecFor(ex, week) {
+  if (!ex || !ex.key) return 90;
+  if (ex.key === "top")    return week >= 13 ? 300 : 180;   // ピーキング期は5分
+  if (ex.key === "dl-top") return week >= 13 ? 300 : 240;
+  if (ex.key === "back")    return 150;
+  if (ex.key === "dl-back") return 180;
+  if (ex.key === "ab" || ex.key === "abflex") return 60;
+  return 90;
+}
+const Timer = (() => {
+  let endAt = 0, iv = null, bar = null, label = "", wake = null, ac = null, hideT = null;
+  function ensureBar() {
+    if (bar && bar.isConnected) return bar;
+    bar = document.createElement("div");
+    bar.className = "rest-timer";
+    document.body.appendChild(bar);
+    return bar;
+  }
+  function beep() {
+    if (S.settings && S.settings.timerSound === false) return;
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === "suspended") ac.resume();
+      [0, 0.28, 0.56].forEach(off => {
+        const o = ac.createOscillator(), g = ac.createGain(), t0 = ac.currentTime + off;
+        o.type = "sine"; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.35, t0 + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.20);
+        o.connect(g); g.connect(ac.destination);
+        o.start(t0); o.stop(t0 + 0.22);
+      });
+    } catch (e) {}
+    try { if (navigator.vibrate) navigator.vibrate([200,100,200,100,400]); } catch (e) {}
+  }
+  function lock() { try { if (navigator.wakeLock && !wake) navigator.wakeLock.request("screen").then(w => { wake = w; }).catch(()=>{}); } catch(e){} }
+  function unlock() { try { if (wake) { wake.release(); wake = null; } } catch(e){} }
+  function paint(leftMs) {
+    const left = Math.max(0, Math.ceil(leftMs / 1000));
+    const done = left <= 0;
+    const b = ensureBar();
+    b.className = "rest-timer" + (done ? " ring" : "");
+    b.innerHTML = "";
+    const l = el("div", "rt-l", `<span class="rt-lab">${esc(done ? "休憩おわり — 次のセットへ" : "休憩中 · " + label)}</span><span class="rt-num">${done ? "START" : Math.floor(left/60) + ":" + String(left%60).padStart(2,"0")}</span>`);
+    b.appendChild(l);
+    if (!done) {
+      const plus = el("button", "rt-b", "+30秒");
+      plus.onclick = e => { e.stopPropagation(); endAt += 30000; paint(endAt - Date.now()); };
+      b.appendChild(plus);
+    }
+    const stop = el("button", "rt-b", done ? "OK" : "✕");
+    stop.onclick = e => { e.stopPropagation(); api.stop(); };
+    b.appendChild(stop);
+  }
+  function tick() {
+    const leftMs = endAt - Date.now();
+    paint(leftMs);
+    if (leftMs <= 0) {
+      clearInterval(iv); iv = null; unlock(); beep();
+      clearTimeout(hideT); hideT = setTimeout(() => api.stop(), 20000);
+    }
+  }
+  const api = {
+    start(sec, lab) {
+      clearInterval(iv); clearTimeout(hideT);
+      label = lab || "";
+      endAt = Date.now() + sec * 1000;
+      lock();
+      // 無音の1発でAudioContextを起こしておく(タップの瞬間でないと鳴らせない端末対策)
+      try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === "suspended") ac.resume(); } catch(e){}
+      paint(endAt - Date.now());
+      iv = setInterval(tick, 250);
+    },
+    stop() {
+      clearInterval(iv); iv = null; clearTimeout(hideT); unlock();
+      if (bar && bar.isConnected) bar.remove();
+      bar = null;
+    },
+    running() { return !!iv; }
+  };
+  return api;
+})();
+
+/* ================================================================
+   ウォームアップ自動計算
+   その日の実際のトップセット重量から逆算する。
+================================================================ */
+const BAR_KG = 20;
+function warmupPlan(work, kind) {
+  const out = [];
+  if (kind !== "dl") out.push({ w: BAR_KG, reps: 10, bar: true });
+  const steps = kind === "dl" ? [[.50,5],[.65,3],[.80,2],[.90,1]] : [[.45,5],[.60,4],[.75,3],[.88,1]];
+  steps.forEach(([p, r]) => {
+    const w = round25(work * p);
+    if (w <= BAR_KG) return;
+    if (out.length && w <= out[out.length-1].w) return;
+    if (w >= work) return;
+    out.push({ w, reps: r });
+  });
+  return out;
+}
+function warmupCard(session, adj) {
+  if (session.type !== "day1" && session.type !== "day2") return null;
+  const key = session.type === "day1" && !session.exercises.some(e => e.key === "top") ? null
+            : (session.type === "day1" ? "top" : "dl-top");
+  if (!key) return null;
+  const ex = session.exercises.find(e => e.key === key);
+  if (!ex || !ex.weight) return null;
+  const work = adj.pct ? round25(ex.weight * (1 + adj.pct)) : ex.weight;
+  const plan = warmupPlan(work, key === "dl-top" ? "dl" : "bench");
+  if (!plan.length) return null;
+  const chain = plan.map(s => `<b>${s.bar ? "バー" : s.w}</b>×${s.reps}`).join(" → ")
+    + ` → <b style="color:var(--series-1)">本番 ${work}kg</b>`;
+  const d = el("div", "exercise");
+  d.innerHTML = `<div class="ex-head"><span class="ex-name">ウォームアップ</span><span class="ex-target">${plan.length}段階</span></div>
+    <div class="wu-step" style="margin-top:6px">${chain}</div>
+    <div class="ex-note">今日の重量から逆算した段取り。アップのセットで疲れないこと——回数は少なめ、休憩は短め(60〜90秒)でいい。本番前の最後の1本を終えたら3分空ける。</div>`;
+  const tb = el("button", "set-chip wu-btn", "⏱ 90秒");
+  tb.style.cssText = "margin-top:8px;min-width:auto;padding:0 12px";
+  tb.onclick = () => Timer.start(90, "ウォームアップ");
+  d.appendChild(tb);
+  return d;
+}
+
+/* ================================================================
+   TMの自動調整(オートレギュレーション)
+   コンディションはその日の「予報」、こっちは実際の「結果」。
+   規定回数に2回続けて届かなければ基準そのものを下げる。
+================================================================ */
+const RESULT_LABEL = { miss: "未達", hit: "規定通り", easy: "余裕あり" };
+function resultKey(kind) { return kind === "dl" ? "dlResult" : "topResult"; }
+function markKey(kind) { return kind === "dl" ? "tmMarkDl" : "tmMarkBench"; }
+function recentResults(kind, n) {
+  const k = resultKey(kind);
+  return Object.keys(S.logs || {}).sort()
+    .filter(d => S.logs[d] && S.logs[d][k])
+    .slice(-n).map(d => ({ date: d, r: S.logs[d][k] }));
+}
+function setTopResult(dateISO, kind, val) {
+  const L = S.logs[dateISO] || { sets: {} };
+  const k = resultKey(kind);
+  L[k] = (L[k] === val) ? null : val;
+  L.week = currentWeek();
+  S.logs[dateISO] = L;
+  save();
+  return L[k] ? evaluateTM(kind) : null;
+}
+function evaluateTM(kind) {
+  if (!S.profile) return null;
+  const isDL = kind === "dl";
+  const cur = isDL ? (S.profile.dlTm || 125) : S.profile.tm;
+  const last = recentResults(kind, 2);
+  if (last.length < 2) return null;
+  const [a, b] = last;
+  const mark = S.profile[markKey(kind)] || "";
+  if (b.date <= mark) return null;          // 同じ連続を二度は使わない
+  let next = null, dir = null;
+  if (a.r === "miss" && b.r === "miss") {
+    next = Math.max(isDL ? 60 : 40, round25(cur * 0.95)); dir = "down";
+    if (next >= cur) return null;
+  } else if (a.r === "easy" && b.r === "easy") {
+    next = round25(cur + (isDL ? 5 : 2.5)); dir = "up";
+  } else return null;
+  if (isDL) S.profile.dlTm = next; else S.profile.tm = next;
+  S.profile[markKey(kind)] = b.date;
+  save();
+  return { dir, from: cur, to: next, kind };
+}
+function tmChangeMessage(ch) {
+  const name = ch.kind === "dl" ? "デッドリフト" : "ベンチ";
+  if (ch.dir === "down") return `${name}のトレーニングマックスを ${ch.from}kg → ${ch.to}kg に下げた。\n\n2回続けて規定回数に届いていない。これは根性の問題ではなく、基準が今の実力より上にあるだけ。ここで下げておくと数週間後に必ず追い越せる。無理に続けると停滞するか、どこか痛める。`;
+  return `${name}のトレーニングマックスを ${ch.from}kg → ${ch.to}kg に上げた。\n\n2回続けて余裕があった。基準が実力に追いついてないから引き上げる。来週から重量が上がる。`;
+}
+function resultRow(dateISO, kind, session) {
+  const wrap = el("div", "res-row");
+  const cur = (S.logs[dateISO] || {})[resultKey(kind)];
+  [["miss","届かなかった"],["hit","規定通り挙げた"],["easy","余裕あり(+2回)"]].forEach(([v, lab]) => {
+    const b = el("button", cur === v ? "on" : "", lab);
+    b.onclick = () => {
+      const ch = setTopResult(dateISO, kind, v);
+      if (ch) alert((ch.dir === "down" ? "⚙️ " : "💪 ") + tmChangeMessage(ch));
+      renderAll();
+    };
+    wrap.appendChild(b);
+  });
+  return wrap;
+}
+
+/* ================================================================
+   体重ペース管理
+   125kg達成まで減量は保留 = 増量中。増え方が速すぎると中身は脂肪で、
+   あとの減量が長引く。7日平均どうしの差で「週あたり何kg」を見る。
+================================================================ */
+function setWeight(dateISO, kg) {
+  if (!S.weights) S.weights = {};
+  if (!kg) delete S.weights[dateISO]; else S.weights[dateISO] = Math.round(kg * 10) / 10;
+  save();
+}
+function weightAvg(endISO, days) {
+  const end = parseISO(endISO).getTime();
+  const start = end - (days - 1) * DAY;
+  const vals = Object.keys(S.weights || {}).filter(d => {
+    const t = parseISO(d).getTime(); return t >= start && t <= end;
+  }).map(d => S.weights[d]).filter(v => v > 0);
+  return vals.length ? { avg: vals.reduce((a,b)=>a+b,0) / vals.length, n: vals.length } : null;
+}
+function weightTrend(endISO) {
+  const a = weightAvg(endISO, 7);
+  const prevEnd = fmtISO(new Date(parseISO(endISO).getTime() - 7 * DAY));
+  const b = weightAvg(prevEnd, 7);
+  if (!a || !b || a.n < 2 || b.n < 2) return null;
+  return { now: a.avg, prev: b.avg, perWeek: a.avg - b.avg, n: a.n + b.n };
+}
+function weightVerdict(tr) {
+  if (!tr) return null;
+  const r = tr.perWeek, pct = tr.now ? (r / tr.now) * 100 : 0;
+  const f = n => (n >= 0 ? "+" : "") + n.toFixed(2);
+  if (r < -0.15) return { zone: "down", color: "var(--status-warning)",
+    msg: `週 ${f(r)}kg — 減っている。125kgを狙っている今の段階で体重が落ちると、ベンチはまず伸びない。減量は達成後でいい。食う量を戻そう。` };
+  if (pct > 0.6) return { zone: "fast", color: "var(--status-warning)",
+    msg: `週 ${f(r)}kg(体重の${pct.toFixed(1)}%)— 速すぎる。この増え方だと大半は脂肪で、あとの減量が数か月延びるし、腹を分厚く見せたい目的とも逆方向。1日200〜300kcalだけ減らせばちょうどよくなる。` };
+  if (r < 0.05) return { zone: "flat", color: "var(--text-muted)",
+    msg: `週 ${f(r)}kg — ほぼ横ばい。今の重量でまだ伸びているなら問題ないが、トップセットが2週続けて止まったら食う量を足すサイン。` };
+  return { zone: "good", color: "var(--status-good)",
+    msg: `週 ${f(r)}kg — 増量ペースとしてちょうどいい範囲。筋肉の取り分が一番大きいのがこのあたり。このまま。` };
+}
+function weightCard(t) {
+  const c = el("div", "card");
+  const today = S.weights ? S.weights[t] : null;
+  const tr = weightTrend(t);
+  const v = weightVerdict(tr);
+  c.innerHTML = `<h2>体重 <span class="sub">毎朝・トイレのあと・裸で</span></h2>`;
+  const grid = el("div", "btn-row");
+  const inp = document.createElement("input");
+  inp.type = "number"; inp.step = "0.1"; inp.inputMode = "decimal";
+  inp.placeholder = "例: 72.4"; inp.value = today || "";
+  const btn = el("button", "btn small", today ? "更新" : "記録");
+  btn.style.flex = "0 0 auto";
+  btn.onclick = () => { const x = parseFloat(inp.value); if (!x) return; setWeight(t, x); renderAll(); };
+  grid.appendChild(inp); grid.appendChild(btn);
+  c.appendChild(grid);
+  if (tr) {
+    c.appendChild(el("p", "muted", `7日平均 <b style="color:var(--series-1)">${tr.now.toFixed(1)}kg</b> ・ 前の7日 ${tr.prev.toFixed(1)}kg`));
+    c.appendChild(el("p", "small-note", `<span style="color:${v.color}">${v.msg}</span>`));
+  } else {
+    const have = Object.keys(S.weights || {}).length;
+    c.appendChild(el("p", "small-note", have
+      ? `${have}日分。<strong>2週間分たまるとペース判定が出る</strong>(7日平均どうしを比べるので、日ごとのブレは無視される)。`
+      : "毎朝の体重を入れておくと、増量ペースが適正かを週あたりの増加量で判定する。1日単位の増減は水分でブレるので気にしなくていい。"));
+  }
+  return c;
 }
 
 /* ================================================================
@@ -1186,6 +1479,9 @@ function renderToday() {
   condCard.appendChild(manualBtn);
   root.appendChild(condCard);
 
+  /* 体重(毎日) */
+  if (session.type !== "pre") root.appendChild(weightCard(t));
+
   /* コーチカード */
   const coach = el("div", "card coach-card");
   coach.innerHTML = `<h2>コーチから</h2>`;
@@ -1216,6 +1512,8 @@ function renderToday() {
   } else if (session.type === "post") {
     wo.appendChild(el("p", "muted", "18週間おつかれさま!新しい目標で再スタートするには「連携」タブ→リセットから。"));
   } else if (session.exercises) {
+    const wuCard = warmupCard(session, adj);
+    if (wuCard) wo.appendChild(wuCard);
     session.exercises.forEach((ex, idx) => {
       const exEl = el("div", "exercise");
       let weightNote = "";
@@ -1245,12 +1543,27 @@ function renderToday() {
             L.sets = L.sets || {};
             L.sets[idx] = L.sets[idx] || [];
             L.sets[idx][i] = !L.sets[idx][i];
+            const turnedOn = !!L.sets[idx][i];
             L.week = currentWeek();
-            S.logs[t] = L; save(); renderToday();
+            S.logs[t] = L; save();
+            /* セットを1本終えた瞬間から休憩を計り始める */
+            if (turnedOn && S.settings.timerAuto !== false) Timer.start(restSecFor(ex, session.week), ex.name);
+            renderToday();
           };
           row.appendChild(chip);
         }
+        const tbtn = el("button", "set-chip", "⏱ " + fmtSec(restSecFor(ex, session.week)));
+        tbtn.style.cssText = "min-width:auto;padding:0 12px";
+        tbtn.title = "休憩タイマーを手動で開始";
+        tbtn.onclick = () => Timer.start(restSecFor(ex, session.week), ex.name);
+        row.appendChild(tbtn);
         exEl.appendChild(row);
+      }
+      /* トップセットの出来 → TMの自動調整 */
+      if ((ex.key === "top" || ex.key === "dl-top") && (session.type === "day1" || session.type === "day2")) {
+        const kind = ex.key === "dl-top" ? "dl" : "bench";
+        exEl.appendChild(el("div", "ex-note", "このセット、規定回数は挙がった?  ↓が2回続くと基準重量(TM)が自動で動く"));
+        exEl.appendChild(resultRow(t, kind, session));
       }
       wo.appendChild(exEl);
     });
@@ -1497,6 +1810,9 @@ function renderProgram() {
     <p><strong>週2ジム・連続2日でOK。</strong>Day1=ベンチの日(押す:胸・肩・三頭)、Day2=デッド+脚の日(引く+下半身)。使う筋肉が被らないから、木・金のような連続2日でも回復的に問題ない。ベンチ125が最優先、デッドは丁寧に伸ばし、脚はレッグプレスで支える。</p>
     <p><strong>週の進行は「実施ベース」。</strong>カレンダーではなく、1週分をやり終えて「完了」を押すたびに次の週へ進む。<strong>岡山(月1)やお盆(月2)で行けない週は押さなければいいだけ</strong>——飛ばした分だけプログラムが待つから、休みが多い月もズレない。罪悪感ゼロで休んでOK。</p>
     <p><strong>週1回しか行けなかった週は「Day1(ベンチ)」をやる。</strong>ベンチ125が最優先だから、削るのはデッドと脚のほう。Day1画面の<strong>「週1モード」</strong>をONにすると、デッドのトップセット1本と最低限の脚が今日のメニューに追加される。それで1週分としてカウントしてOK——ただし週1が2〜3週続いたらボリューム不足なので、1週戻して同じ週をやり直すのが安全。</p>
+    <p><strong>基準重量(TM)は自動で上下する。</strong>トップセットの下にある「届かなかった / 規定通り / 余裕あり」を毎回押しておくと、<strong>2回続けて未達なら基準を5%下げ、2回続けて余裕なら2.5kg上げる</strong>。コンディションがその日の予報なら、こっちは実際の結果。下がるのは失敗ではなく、基準が実力の少し先に行きすぎただけ——ここで一度引くと数週間後に必ず追い越せる。</p>
+    <p><strong>休憩は計る。</strong>セットを終えてチェックを入れた瞬間に休憩タイマーが動き出す。ベンチのトップセットは3分(13週目以降は5分)、バックオフは2分半、補助種目は90秒。体感でやると必ず短くなって、同じ重量でも挙がる回数が落ちる。手動で始めたい時は⏱ボタン。</p>
+    <p><strong>体重は毎朝。</strong>125kg達成まで減量は保留する方針だから、今は増量中。ただし増え方が速いと中身は脂肪で、あとの減量が長引くし、腹を分厚く見せたい目的とも逆になる。7日平均どうしを比べて週あたりの増加量を出し、速すぎ・遅すぎを判定する。1日単位のブレは水分なので気にしなくていい。</p>
     <p><strong>腹筋は2方向でやる。</strong>アブローラーが鍛えてるのは腹筋というより<strong>「腰が反るのを腹圧で止める力」</strong>——デッドで腰が反り返るのを防ぐ、まさにその能力で、ベンチにも効く(胴体が硬いほど脚の力がバーに伝わる)。ただしこれは<strong>強くはするが厚くはしにくい</strong>。ブロックを分厚くしたいなら<strong>丸める方向</strong>——ケーブルクランチや加重クランチが必要で、こっちは重量を足せるぶん素直に肥大する。だからDay2と自宅メニューには必ず両方入れてある。</p>
     <p><strong>アブローラーは週数ではなくレベル制。</strong>膝コロ壁ストップ(Lv1)から加重立ちコロ(Lv6)まで6段階あって、記録カードの ◀ ▶ でいつでも変えられる。<strong>プログラムの週とは完全に独立</strong>——できるようになった日に上げればいい。各レベルに「次に上げる目安」が出るので、それを満たしたら1つ上げる。Lv6に入ると記録の単位がcmからkgに自動で切り替わる。<strong>腰を反らせないこと</strong>だけは全レベル共通で絶対。</p>
     <p><strong>脚のプレート事情。</strong>20kg×12枚(最大240kg)までなので、レッグプレスは重さより高回数・止め・スローで効かせる設計。頭打ちになったら片脚に切り替えて強度を上げる。</p>
@@ -1544,6 +1860,22 @@ function renderProgress() {
   const wdl = el("div", "chart-wrap"); cdl.appendChild(wdl);
   root.appendChild(cdl);
   lineChart(wdl, dls, { unit: "kg", seriesName: "デッド推定1RM", label: "デッドリフト推定1RMの推移" });
+
+  // 体重(7日移動平均)
+  const wkeys = Object.keys(S.weights || {}).sort();
+  if (wkeys.length >= 2) {
+    const wser = wkeys.map(d => { const a = weightAvg(d, 7); return { x: d, y: a ? Math.round(a.avg * 10) / 10 : S.weights[d] }; });
+    const cw = el("div", "card");
+    const trw = weightTrend(todayISO());
+    cw.innerHTML = `<h2>体重の推移 <span class="sub">7日移動平均</span></h2>`;
+    const ww = el("div", "chart-wrap"); cw.appendChild(ww);
+    root.appendChild(cw);
+    lineChart(ww, wser, { unit: "kg", min0: false, seriesName: "体重(7日平均)", label: "体重の推移" });
+    if (trw) {
+      const vv = weightVerdict(trw);
+      cw.appendChild(el("p", "small-note", `<span style="color:${vv.color}">${vv.msg}</span>`));
+    }
+  }
 
   const c2 = el("div", "card");
   c2.innerHTML = `<h2>コンディションスコア <span class="sub">直近3週間</span></h2>`;
@@ -1627,6 +1959,8 @@ function renderSettings() {
     <label class="field"><span class="fl">Day2 デッド+脚の日(曜日)</span><select id="set-day2">${dayOpts(S.profile.day2)}</select></label>
     <label class="field"><span class="fl">現在のプログラム週 (1〜18)</span><input type="number" id="set-week" min="1" max="18" step="1" value="${currentWeek()}" inputmode="numeric"></label>
     <label class="field"><span class="fl">アブローラーのレベル</span><select id="set-ablv">${AB_LEVELS.map(L=>`<option value="${L.lv}" ${abLevel()===L.lv?"selected":""}>Lv${L.lv} — ${L.name}</option>`).join("")}</select></label>
+    <label class="field"><span class="fl">セット完了で休憩タイマーを自動開始</span><select id="set-tauto"><option value="1" ${S.settings.timerAuto!==false?"selected":""}>する</option><option value="0" ${S.settings.timerAuto===false?"selected":""}>しない(手動の⏱だけ)</option></select></label>
+    <label class="field"><span class="fl">タイマー終了の音・振動</span><select id="set-tsound"><option value="1" ${S.settings.timerSound!==false?"selected":""}>鳴らす</option><option value="0" ${S.settings.timerSound===false?"selected":""}>鳴らさない</option></select></label>
     <label class="field"><span class="fl">開始日(記録用・進行には影響しません)</span><input type="date" id="set-start" value="${S.profile.startDate||""}"></label>
     <button class="btn secondary" id="save-prof">設定を保存</button>
     <p class="small-note">Day1とDay2は連続した2日でOK(例: 木・金)。使う筋肉が違うので連日でも回復に問題ありません。週の進行は「今日」タブの完了ボタンで手動なので、休みが多くてもズレません。</p>`;
@@ -1667,6 +2001,8 @@ function renderSettings() {
     const wkIn = parseInt($("#set-week").value);
     if (wkIn >= 1 && wkIn <= 18) { if (!S.progress) S.progress = { week: 1, history: [] }; S.progress.week = wkIn; }
     S.profile.abLevel = parseInt($("#set-ablv").value) || abLevel();
+    S.settings.timerAuto  = $("#set-tauto").value === "1";
+    S.settings.timerSound = $("#set-tsound").value === "1";
     S.profile.startDate = $("#set-start").value || S.profile.startDate;
     save(); alert("保存しました"); renderAll();
   };
@@ -1682,7 +2018,7 @@ function renderSettings() {
     const f = ev.target.files[0]; if (!f) return;
     const rd = new FileReader();
     rd.onload = () => {
-      try { const d = JSON.parse(rd.result); if (d.profile) { S = d; save(); alert("復元しました"); renderAll(); } else alert("形式が違います"); }
+      try { const d = JSON.parse(rd.result); if (d.profile) { S = d; migrate(); save(); alert("復元しました"); renderAll(); } else alert("形式が違います"); }
       catch(e){ alert("読み込みに失敗: " + e.message); }
     };
     rd.readAsText(f);
