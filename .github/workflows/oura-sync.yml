@@ -20,6 +20,10 @@ jobs:
             "https://api.ouraring.com/v2/usercollection/daily_readiness?start_date=$START&end_date=$END" > r.json
           curl -sf -H "Authorization: Bearer $OURA_TOKEN" \
             "https://api.ouraring.com/v2/usercollection/daily_sleep?start_date=$START&end_date=$END" > s.json
+          # 生のHRVと最低心拍はこっちに入っている(取れなくても全体は止めない)
+          curl -sf -H "Authorization: Bearer $OURA_TOKEN" \
+            "https://api.ouraring.com/v2/usercollection/sleep?start_date=$START&end_date=$END" > sl.json \
+            || echo '{"data":[]}' > sl.json
           python3 - <<'EOF'
           import json, datetime
           days = {}
@@ -27,9 +31,27 @@ jobs:
               days.setdefault(rec['day'], {})['readiness'] = rec.get('score')
           for rec in json.load(open('s.json')).get('data', []):
               days.setdefault(rec['day'], {})['sleepScore'] = rec.get('score')
+          # 1日に複数の睡眠記録(昼寝など)がある場合は一番長いものをその日の代表にする
+          main = {}
+          try:
+              for rec in json.load(open('sl.json')).get('data', []):
+                  day = rec.get('day')
+                  if not day:
+                      continue
+                  dur = rec.get('total_sleep_duration') or 0
+                  if day not in main or dur > (main[day].get('total_sleep_duration') or 0):
+                      main[day] = rec
+          except Exception:
+              main = {}
+          for day, rec in main.items():
+              d = days.setdefault(day, {})
+              if rec.get('average_hrv'):
+                  d['hrv'] = rec['average_hrv']
+              if rec.get('lowest_heart_rate'):
+                  d['rhr'] = rec['lowest_heart_rate']
           json.dump({'updated': datetime.datetime.utcnow().isoformat() + 'Z', 'days': days}, open('oura.json', 'w'))
           EOF
-          rm r.json s.json
+          rm -f r.json s.json sl.json
       - name: Commit
         run: |
           git config user.name "oura-sync"
