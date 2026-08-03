@@ -7,11 +7,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="BENCH125">
+<meta name="apple-mobile-web-app-title" content="OVERLOAD">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" href="icon-192.png">
-<title>BENCH125 — ベンチプレス125kgコーチ</title>
+<title>OVERLOAD — ベンチプレス125kgコーチ</title>
 <style>
 :root {
   color-scheme: dark;
@@ -236,7 +236,7 @@ details.help .help-body a { color: var(--series-1); }
 <!-- ======== onboarding ======== -->
 <div class="onboard-overlay" id="onboard">
   <div class="onboard-inner">
-    <h1>BENCH<span>125</span></h1>
+    <h1>OVER<span>LOAD</span></h1>
     <p class="lead">Oura Ring 4 と Pixel Watch 3 のコンディションデータで毎日の重量を自動調整する、あなた専用のベンチプレスコーチ。</p>
     <div class="card">
       <h2>初期設定</h2>
@@ -265,7 +265,7 @@ details.help .help-body a { color: var(--series-1); }
 </div>
 
 <header class="app-header">
-  <h1>BENCH<span>125</span></h1>
+  <h1>OVER<span>LOAD</span></h1>
   <div class="date" id="today-date"></div>
 </header>
 
@@ -307,7 +307,7 @@ details.help .help-body a { color: var(--series-1); }
 <script>
 "use strict";
 /* ================================================================
-   BENCH125 — ベンチプレス125kgコーチ
+   OVERLOAD — ベンチプレス125kgコーチ
    Oura Ring 4 + Pixel Watch 3 (Fitbit) 連携 / 自動調整プログラム
 ================================================================ */
 
@@ -334,7 +334,7 @@ const Store = (() => {
 
 /* ---------- state ---------- */
 const DEFAULTS = {
-  profile: null, // {maxStart, goal, day1, day2, startDate, tm, dlTm}
+  profile: null, // {maxStart, goal, day1, day2, startDate, tm, dlTm, abLevel}
   progress: { week: 1, history: [], solo: false }, // 実施ベースの週カウンター(日付に依存しない)。solo=今週はDay1だけ
   logs: {},      // dateISO -> {sets:{exIdx:[bool,...]}, topWeight, topReps, e1rm, note}
   condition: {}, // dateISO -> {score, src, readiness, sleepScore, hrv, rhr, subjective}
@@ -597,6 +597,11 @@ function buildDay2(wk, dateISO) {
     });
   }
   day2Accessories(wk).forEach(a => ex.push({ name: a.name, detail: () => a.detail(dpct), note: a.note }));
+  /* アブローラーはDay2の最後に置く(次のベンチまで中5日あり、デッド前日に体幹を疲れさせない) */
+  const ab = abRoller(wk);
+  if (ab) ex.push({ name: ab.name, key: "ab", detail: () => ab.detail, note: ab.note });
+  const fl = abFlexion(wk);
+  if (fl) ex.push({ name: fl.name, key: "abflex", detail: () => fl.detail, note: fl.note });
   return { type: "day2", title: `Day2 デッド+脚の日`, week: wk, exercises: ex, plan: dl };
 }
 
@@ -641,6 +646,143 @@ function adjustment(score) {
   if (score >= 70) return { zone: "good", label: "良好", color: "var(--status-good)", icon: "✓", pct: 0, setDelta: 0 };
   if (score >= 55) return { zone: "caution", label: "やや疲労", color: "var(--status-warning)", icon: "◆", pct: -0.05, setDelta: -1 };
   return { zone: "low", label: "要回復", color: "var(--status-critical)", icon: "■", pct: -0.125, setDelta: -2 };
+}
+
+/* アブローラー: 週数ではなく「今できるレベル」で決まる(アンチエクステンション=デッドの腰を守る力) */
+const AB_FORM = "腰を反らせない。骨盤を少し後傾させ、みぞおちを引き込んだまま転がす。腰が反った位置がその日の限界";
+const AB_LEVELS = [
+  { lv: 1, name: "膝コロ・壁ストップ", detail: "3セット × 8〜12回", unit: "cm",
+    note: "膝をついて、壁の手前で止める。壁を数cmずつ遠ざけていくのが負荷を上げる唯一の方法。",
+    up: "3セット×12回が余裕を持ってできて、壁が体の長さくらいまで遠ざかったら" },
+  { lv: 2, name: "膝コロ・フルレンジ", detail: "3セット × 8〜12回", unit: "cm",
+    note: "膝つきのまま、体が一直線になるまで伸ばして自力で戻る。",
+    up: "3セット×12回をフォームを崩さずできたら" },
+  { lv: 3, name: "膝コロ・4秒スロー + ボトム2秒静止", detail: "3セット × 6〜10回", unit: "cm",
+    note: "4秒かけて伸ばし、伸びきった位置で2秒止めてから戻る。腹筋が一番育つのはこの止めている2秒。",
+    up: "3セット×10回を止めたまま耐えられたら" },
+  { lv: 4, name: "立ちコロ・壁ストップ", detail: "3セット × 5〜8回", unit: "cm",
+    note: "立った状態から。壁(または箱・ソファ)の手前で止める。壁との距離だけが負荷調整のダイヤル。",
+    up: "壁まであと10cmの位置で、3セット×8回できたら" },
+  { lv: 5, name: "立ちコロ・フルレンジ", detail: "3セット × 5〜8回", unit: "cm",
+    note: "床まで伸ばしきって自力で戻る。ここまで来たら体幹はほぼ完成。",
+    up: "3セット×8回が安定してできたら" },
+  { lv: 6, name: "加重立ちコロ", detail: "3セット × 6〜10回", unit: "kg",
+    note: "リュックにプレートや本を入れて背負う。ここからは回数ではなく重量で伸ばす段階。",
+    up: "3セット×10回できたら +2.5kg" }
+];
+function abLevel() { return Math.max(1, Math.min(AB_LEVELS.length, (S.profile && S.profile.abLevel) || 1)); }
+function setAbLevel(n) {
+  if (!S.profile) return;
+  S.profile.abLevel = Math.max(1, Math.min(AB_LEVELS.length, n));
+  save();
+}
+function abRoller(week) {
+  if (week >= 18) return null;
+  const L = AB_LEVELS[abLevel() - 1];
+  if (week === 17) return { name: `アブローラー(Lv${L.lv} ${L.name}・軽め)`, detail: "2セット × いつもの半分の回数", note: "テーパー週。挑戦に疲れを残さない。" + AB_FORM, unit: L.unit, lv: L.lv, up: L.up };
+  return { name: `アブローラー(Lv${L.lv} ${L.name})`, detail: L.detail, note: L.note + AB_FORM, unit: L.unit, lv: L.lv, up: L.up };
+}
+
+/* 丸める方向の腹筋(厚みを作るのはこっち。アブローラーは反らせない力=薄いが強い体幹) */
+function abFlexion(week) {
+  if (week >= 18) return null;
+  if (week === 17) return { name: "クランチ(自重・軽め)", detail: "2セット × 15回", note: "テーパー週。感覚だけ残す" };
+  return {
+    name: "ケーブルクランチ(加重)",
+    detail: "3セット × 10〜15回",
+    note: "ロープを首の後ろで持ち、みぞおちを膝に近づけるように背中を丸める。腰は動かさず、腹だけで潰す。アブローラーが『反らせない力』なら、こっちは『丸める力』——ブロックを分厚くするのはこっち。15回できたら次回 +2.5kg"
+  };
+}
+function abFlexionHome(week) {
+  if (week >= 18) return null;
+  return {
+    key: "cr", name: "加重クランチ", detail: "3セット × 10〜15回",
+    note: "胸にダンベル・水入りペットボトル・本を詰めたリュックを抱えて。自重で20回できるなら必ず重りを足す——回数を増やしても厚みは出ない、重さを足すと出る"
+  };
+}
+
+/* アブローラーの自己ベスト(単位はレベルによってcm/kgが切り替わる) */
+function abBest(unit) {
+  const key = unit === "kg" ? "abKg" : "abCm";
+  let best = null;
+  Object.keys(S.logs || {}).forEach(d => {
+    const l = S.logs[d];
+    if (l && l[key] && (!best || l[key] > best.v)) best = { v: l[key], date: d };
+  });
+  return best;
+}
+
+/* ジムに行けない日の自宅メニュー(任意)。岡山・お盆・休養日に */
+function homeMenu(week) {
+  const w = Math.max(1, Math.min(17, week || 1));
+  const items = [];
+  const ab = abRoller(w);
+  if (ab) items.push({ key: "ab", name: ab.name, detail: ab.detail, note: ab.note });
+  const fl = abFlexionHome(w);
+  if (fl) items.push(fl);
+  items.push({ key: "lr", name: "レッグレイズ(床)", detail: "3セット × 12〜15回", note: "腰を床に押しつけたまま脚を上げ下げ。下腹に効く。ぶら下がれる場所があればハンギングレッグレイズのほうが効果は上" });
+  if (w <= 6) items.push({ key: "pu", name: "腕立て伏せ", detail: "4セット × 15〜20回", note: "胸を床につく直前まで。ベンチの動きを忘れないための維持" });
+  else if (w <= 12) items.push({ key: "pu", name: "腕立て伏せ(足上げ or スロー)", detail: "4セット × 12〜15回(3秒かけて下ろす)", note: "足を椅子に乗せて角度をつけると強度が上がる" });
+  else items.push({ key: "pu", name: "腕立て伏せ(軽め)", detail: "3セット × 15回", note: "血流を回す程度でOK" });
+  items.push({ key: "pull", name: "懸垂(ぶら下がれる場所があれば)", detail: "5セットで合計20〜25回", note: "任意。公園の鉄棒でもOK。無ければ飛ばす" });
+  items.push({ key: "side", name: "サイドレイズ(PUMP Pro or ダンベル)", detail: "3セット × 15回", note: "任意。持ち出せる時だけ" });
+  return items;
+}
+
+/* アブローラーの記録ブロック(Day2 と 自宅メニューの両方で使う)。レベルの上げ下げもここから */
+function abDistanceBlock(t) {
+  const wrap = el("div");
+  wrap.style.marginTop = "12px";
+  const LV = AB_LEVELS[abLevel() - 1];
+  const unit = LV.unit;
+  const isKg = unit === "kg";
+  wrap.innerHTML = `<h2>アブローラーの記録 <span class="sub">${isKg ? "重量(kg)が進歩の数字" : "距離(cm)が進歩の数字"}</span></h2>`;
+
+  /* レベルの上げ下げ */
+  const lvRow = el("div", "btn-row");
+  lvRow.style.alignItems = "center";
+  const dn = el("button", "btn small secondary", "◀");
+  dn.style.flex = "0 0 auto";
+  const lab = el("div", "", `<b style="color:var(--series-1)">Lv${LV.lv}</b> ${esc(LV.name)}`);
+  lab.style.flex = "1"; lab.style.textAlign = "center"; lab.style.fontSize = ".88rem"; lab.style.lineHeight = "1.35";
+  const up = el("button", "btn small secondary", "▶");
+  up.style.flex = "0 0 auto";
+  dn.disabled = LV.lv <= 1;
+  up.disabled = LV.lv >= AB_LEVELS.length;
+  dn.onclick = () => { setAbLevel(LV.lv - 1); renderToday(); };
+  up.onclick = () => { setAbLevel(LV.lv + 1); renderToday(); };
+  lvRow.appendChild(dn); lvRow.appendChild(lab); lvRow.appendChild(up);
+  wrap.appendChild(lvRow);
+  wrap.appendChild(el("p", "small-note", `<strong>次のレベルへ上げる目安:</strong> ${esc(LV.up)}`));
+
+  /* 記録 */
+  const log = S.logs[t] || {};
+  const cur = isKg ? log.abKg : log.abCm;
+  const row = el("div", "btn-row");
+  row.style.marginTop = "8px";
+  const inp = document.createElement("input");
+  inp.type = "number"; inp.step = isKg ? "2.5" : "1";
+  inp.placeholder = isKg ? "重量kg" : "距離cm";
+  inp.inputMode = "decimal";
+  inp.value = cur || "";
+  const b = el("button", "btn small", "記録");
+  b.style.flex = "0 0 auto";
+  b.onclick = () => {
+    const v = parseFloat(inp.value);
+    if (!v) return;
+    const L = S.logs[t] || { sets: {} };
+    if (isKg) L.abKg = v; else L.abCm = v;
+    L.abLv = LV.lv; L.week = currentWeek();
+    S.logs[t] = L; save(); renderToday();
+  };
+  row.appendChild(inp); row.appendChild(b);
+  wrap.appendChild(row);
+
+  const best = abBest(unit);
+  if (best) wrap.appendChild(el("p", "small-note", `自己ベスト <b>${best.v}${unit}</b>(${fmtJP(best.date)})${cur && cur >= best.v ? " — 🎉 今日更新!" : ""}`));
+  else if (isKg) wrap.appendChild(el("p", "small-note", "背負った重量をそのまま記録する。ここまで来たら普通の種目と同じで、<strong>重量が増えれば腹筋も厚くなる</strong>。"));
+  else wrap.appendChild(el("p", "small-note", "測り方は自由でいい。壁ストップなら「壁からの距離」、フルレンジなら「伸ばしきった時の手から膝(または足)までの距離」。<strong>基準を1つ決めて毎回それを使う</strong>だけで、重量が測れない種目なのに伸びが数字で見える。"));
+  return wrap;
 }
 
 /* リカバリーメニュー (リリースガン中心のセルフケア) */
@@ -699,7 +841,7 @@ function coachMessage(session, cond, adj) {
   }
   if (session.type === "rest") {
     if (adj.zone === "low") msgs.push("休むのも仕事のうち。今日はしっかり食べて寝よう。筋肉はジムじゃなく布団の中で強くなる。");
-    else msgs.push("今日は休養日。タンパク質は体重×2g、睡眠7時間以上。それが次のベンチの重量になる。余裕があれば自宅でサイドレイズや懸垂を軽く足してもOK(必須じゃない)。");
+    else msgs.push("今日は休養日。タンパク質は体重×2g、睡眠7時間以上。それが次のベンチの重量になる。動きたい日は下の<strong>自宅メニュー</strong>をどうぞ——アブローラー中心で、やってもやらなくてもプログラムは崩れない。");
   }
   const hb = hrvBaseline();
   if (cond && cond.hrv > 0 && hb && cond.hrv < hb * 0.85) msgs.push(`⚠️ HRVが14日平均より15%以上低い(${Math.round(cond.hrv)}ms / 平均${Math.round(hb)}ms)。飲酒・寝不足・ストレスに心当たりは?`);
@@ -1154,8 +1296,43 @@ function renderToday() {
         wo.appendChild(dlWrap);
       }
     }
+    /* アブローラーの距離記録 (Day2) */
+    if (session.type === "day2" && abRoller(session.week)) {
+      wo.appendChild(el("div", "divider"));
+      wo.appendChild(abDistanceBlock(t));
+    }
   }
   root.appendChild(wo);
+
+  /* 自宅メニュー(ジムに行けない日・任意) */
+  if (session.type === "rest") {
+    const hm = homeMenu(session.week);
+    if (hm.length) {
+      const hc = el("div", "card");
+      hc.innerHTML = `<h2>自宅メニュー <span class="sub">任意・ジムに行けない日に</span></h2>`;
+      hc.appendChild(el("p", "muted", "やらなくてもプログラムは崩れない。<strong>岡山やお盆でジムが丸ごと空く週は、これだけでも十分</strong>——特にアブローラーは「腰が反るのを腹圧で止める力」を鍛えるから、デッドの土台としてジムが空く週こそ効く。"));
+      const log = S.logs[t] || {};
+      hm.forEach((r, i) => {
+        const row = el("div", "exercise");
+        const done = log.home && log.home[i];
+        row.innerHTML = `<div class="ex-head"><span class="ex-name">${esc(r.name)}</span><span class="ex-target">${esc(r.detail)}</span></div><div class="ex-note">${esc(r.note)}</div>`;
+        const chip = el("button", "set-chip" + (done ? " done" : ""), done ? "✓ 完了" : "やったらタップ");
+        chip.style.cssText = "margin-top:8px;min-width:110px";
+        chip.onclick = () => {
+          const L = S.logs[t] || { sets: {} };
+          L.home = L.home || {};
+          L.home[i] = !L.home[i];
+          L.week = currentWeek();
+          S.logs[t] = L; save(); renderToday();
+        };
+        row.appendChild(chip);
+        hc.appendChild(row);
+      });
+      hc.appendChild(el("div", "divider"));
+      hc.appendChild(abDistanceBlock(t));
+      root.appendChild(hc);
+    }
+  }
 
   /* 週の進行(実施ベース・日付に依存しない) */
   if (session.type === "day1" || session.type === "day2" || session.type === "test") {
@@ -1288,6 +1465,8 @@ function renderProgram() {
     <p><strong>週2ジム・連続2日でOK。</strong>Day1=ベンチの日(押す:胸・肩・三頭)、Day2=デッド+脚の日(引く+下半身)。使う筋肉が被らないから、木・金のような連続2日でも回復的に問題ない。ベンチ125が最優先、デッドは丁寧に伸ばし、脚はレッグプレスで支える。</p>
     <p><strong>週の進行は「実施ベース」。</strong>カレンダーではなく、1週分をやり終えて「完了」を押すたびに次の週へ進む。<strong>岡山(月1)やお盆(月2)で行けない週は押さなければいいだけ</strong>——飛ばした分だけプログラムが待つから、休みが多い月もズレない。罪悪感ゼロで休んでOK。</p>
     <p><strong>週1回しか行けなかった週は「Day1(ベンチ)」をやる。</strong>ベンチ125が最優先だから、削るのはデッドと脚のほう。Day1画面の<strong>「週1モード」</strong>をONにすると、デッドのトップセット1本と最低限の脚が今日のメニューに追加される。それで1週分としてカウントしてOK——ただし週1が2〜3週続いたらボリューム不足なので、1週戻して同じ週をやり直すのが安全。</p>
+    <p><strong>腹筋は2方向でやる。</strong>アブローラーが鍛えてるのは腹筋というより<strong>「腰が反るのを腹圧で止める力」</strong>——デッドで腰が反り返るのを防ぐ、まさにその能力で、ベンチにも効く(胴体が硬いほど脚の力がバーに伝わる)。ただしこれは<strong>強くはするが厚くはしにくい</strong>。ブロックを分厚くしたいなら<strong>丸める方向</strong>——ケーブルクランチや加重クランチが必要で、こっちは重量を足せるぶん素直に肥大する。だからDay2と自宅メニューには必ず両方入れてある。</p>
+    <p><strong>アブローラーは週数ではなくレベル制。</strong>膝コロ壁ストップ(Lv1)から加重立ちコロ(Lv6)まで6段階あって、記録カードの ◀ ▶ でいつでも変えられる。<strong>プログラムの週とは完全に独立</strong>——できるようになった日に上げればいい。各レベルに「次に上げる目安」が出るので、それを満たしたら1つ上げる。Lv6に入ると記録の単位がcmからkgに自動で切り替わる。<strong>腰を反らせないこと</strong>だけは全レベル共通で絶対。</p>
     <p><strong>脚のプレート事情。</strong>20kg×12枚(最大240kg)までなので、レッグプレスは重さより高回数・止め・スローで効かせる設計。頭打ちになったら片脚に切り替えて強度を上げる。</p>
     <p>重量は毎回のコンディションスコアで自動調整。<strong>数字は提案</strong>——バーの速度が遅い日は自分で下げてOK。記録を入れると推定MAXからTMが自動で上がる。</p>
     <p>4週・10週・17週は意図的な回復週。<strong>飛ばさないこと。</strong>ここで超回復が起きる。もし岡山週とうまく重なればラッキー、丸ごと休んで大丈夫。</p>`;
@@ -1415,6 +1594,7 @@ function renderSettings() {
     <label class="field"><span class="fl">Day1 ベンチの日(曜日)</span><select id="set-day1">${dayOpts(S.profile.day1)}</select></label>
     <label class="field"><span class="fl">Day2 デッド+脚の日(曜日)</span><select id="set-day2">${dayOpts(S.profile.day2)}</select></label>
     <label class="field"><span class="fl">現在のプログラム週 (1〜18)</span><input type="number" id="set-week" min="1" max="18" step="1" value="${currentWeek()}" inputmode="numeric"></label>
+    <label class="field"><span class="fl">アブローラーのレベル</span><select id="set-ablv">${AB_LEVELS.map(L=>`<option value="${L.lv}" ${abLevel()===L.lv?"selected":""}>Lv${L.lv} — ${L.name}</option>`).join("")}</select></label>
     <label class="field"><span class="fl">開始日(記録用・進行には影響しません)</span><input type="date" id="set-start" value="${S.profile.startDate||""}"></label>
     <button class="btn secondary" id="save-prof">設定を保存</button>
     <p class="small-note">Day1とDay2は連続した2日でOK(例: 木・金)。使う筋肉が違うので連日でも回復に問題ありません。週の進行は「今日」タブの完了ボタンで手動なので、休みが多くてもズレません。</p>`;
@@ -1454,6 +1634,7 @@ function renderSettings() {
     S.profile.day2 = parseInt($("#set-day2").value);
     const wkIn = parseInt($("#set-week").value);
     if (wkIn >= 1 && wkIn <= 18) { if (!S.progress) S.progress = { week: 1, history: [] }; S.progress.week = wkIn; }
+    S.profile.abLevel = parseInt($("#set-ablv").value) || abLevel();
     S.profile.startDate = $("#set-start").value || S.profile.startDate;
     save(); alert("保存しました"); renderAll();
   };
@@ -1461,7 +1642,7 @@ function renderSettings() {
     const blob = new Blob([JSON.stringify(S, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `bench125-backup-${todayISO()}.json`;
+    a.download = `overload-backup-${todayISO()}.json`;
     a.click();
   };
   $("#btn-import").onclick = () => $("#import-file").click();
