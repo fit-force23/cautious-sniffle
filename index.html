@@ -1473,6 +1473,24 @@ function renderToday() {
     if (cond.rhr) rows.push(`安静時心拍 <b>${cond.rhr}</b>`);
     if (cond.subjective) rows.push(`主観 <b>${cond.subjective}</b>`);
     if (rows.length) condCard.appendChild(el("p", "muted", rows.join(" ・ ") + `<span style="opacity:.7">(${cond.src || "手入力"})</span>`));
+  } else {
+    /* 今日の分がまだ来ていない時は直近のデータを参考として出す。
+       判定(score)には一切使わない — 取れているかの確認用 */
+    const lastDay = Object.keys(S.condition).sort().filter(d => d < t).pop();
+    const lc = lastDay ? S.condition[lastDay] : null;
+    if (lc) {
+      const rows = [];
+      if (lc.readiness) rows.push(`レディネス <b>${lc.readiness}</b>`);
+      if (lc.sleepScore) rows.push(`睡眠 <b>${lc.sleepScore}</b>`);
+      if (lc.hrv) rows.push(`HRV <b>${Math.round(lc.hrv)}ms</b>`);
+      if (lc.rhr) rows.push(`安静時心拍 <b>${lc.rhr}</b>`);
+      if (rows.length) {
+        const md = lastDay.slice(5).replace("-", "/");
+        condCard.appendChild(el("p", "muted",
+          `今日の睡眠データはまだ届いていない。<b>直近 ${md}</b> は ${rows.join(" ・ ")}。<br>` +
+          `起きたあとOuraアプリを開いて同期すれば、遅くとも2時間以内に今日の分が入る。急ぐ時は手入力でいい。`));
+      }
+    }
   }
   const manualBtn = el("button", "toggle-table", cond ? "コンディションを手入力で修正する" : "コンディションを手入力する");
   manualBtn.onclick = () => toggleManualCond(condCard, t);
