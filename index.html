@@ -402,12 +402,12 @@ function blockOf(week) { return BLOCKS.find(b => week >= b.range[0] && week <= b
 
 /* 週ごとのメイン(トップセット)処方: TMに対する% */
 const WEEK_PLAN = {
-  1:  { top: {pct: .775, reps: 5, sets: 1}, back: {pct: .70,  reps: 6, sets: 4}, label: "5回 @77.5%" },
-  2:  { top: {pct: .80,  reps: 5, sets: 1}, back: {pct: .715, reps: 6, sets: 4}, label: "5回 @80%" },
-  3:  { top: {pct: .825, reps: 5, sets: 1}, back: {pct: .73,  reps: 6, sets: 4}, label: "5回 @82.5%" },
-  4:  { top: {pct: .75,  reps: 5, sets: 1}, back: {pct: .675, reps: 5, sets: 3}, label: "軽め(回復週)", deload: true },
-  5:  { top: {pct: .84,  reps: 5, sets: 1}, back: {pct: .745, reps: 6, sets: 4}, label: "5回 @84%" },
-  6:  { top: {pct: .855, reps: 5, sets: 1}, back: {pct: .755, reps: 5, sets: 4}, label: "5回 @85.5% ※最終セット余力残し", amrap: true },
+  1:  { top: {pct: .775, reps: 5, sets: 1}, back: {pct: .70,  reps: 4, sets: 5}, label: "5回 @77.5%" },
+  2:  { top: {pct: .80,  reps: 5, sets: 1}, back: {pct: .715, reps: 4, sets: 5}, label: "5回 @80%" },
+  3:  { top: {pct: .825, reps: 5, sets: 1}, back: {pct: .73,  reps: 4, sets: 5}, label: "5回 @82.5%" },
+  4:  { top: {pct: .75,  reps: 5, sets: 1}, back: {pct: .675, reps: 4, sets: 3}, label: "軽め(回復週)", deload: true },
+  5:  { top: {pct: .84,  reps: 5, sets: 1}, back: {pct: .745, reps: 4, sets: 5}, label: "5回 @84%" },
+  6:  { top: {pct: .855, reps: 5, sets: 1}, back: {pct: .755, reps: 4, sets: 5}, label: "5回 @85.5% ※最終セット余力残し", amrap: true },
   7:  { top: {pct: .85,  reps: 3, sets: 2}, back: {pct: .78,  reps: 4, sets: 4}, label: "3回×2 @85%" },
   8:  { top: {pct: .875, reps: 3, sets: 2}, back: {pct: .79,  reps: 4, sets: 4}, label: "3回×2 @87.5%" },
   9:  { top: {pct: .90,  reps: 3, sets: 1}, back: {pct: .80,  reps: 4, sets: 4}, label: "3回 @90%" },
@@ -447,16 +447,14 @@ const DL_PLAN = {
 /* Day1(ベンチの日)の補助種目 — 押す系(胸・肩・三頭)。pctはベンチTM基準 */
 function day1Accessories(week) {
   if (week <= 6) return [
+    { name: "ミリタリープレス(立ち・バーベル)", detail: () => "3セット × 8回 @ 40kg目安", note: "頭上に押す力はベンチの押し切り(三頭・前部三角筋)に直結する。バーベルなので2.5kg刻みで伸ばせる。手首が反って痛むならリストラップ。腰が気になる日は座ってやってもいい。40kgから始めて、8回×3が余裕になったら+2.5kg" },
     { name: "止めベンチ(2秒止め)", detail: pct => `3セット × 6回 @ ${pct(.65)}kg`, note: "胸で完全に止めて爆発。ケツ上げ癖の矯正に最重要" },
-    { name: "ダンベルショルダープレス", detail: () => "3セット × 10〜12回 @ 10kg", note: "肩の押す力。10kgで軽くなったら3秒かけて下ろすスローで効かせる" },
-    { name: "サイドレイズ(PUMP Pro or ダンベル)", detail: () => "4セット × 15回", note: "三角筋中部。軽くていいから丁寧に、最後は焼き切る" },
-    { name: "ディップス", detail: () => "3セット × 8〜12回", note: "深く下ろして胸で押す。ベンチ下部と三頭の強化" }
+    { name: "サイドレイズ(PUMP Pro or ダンベル)", detail: () => "4セット × 15回", note: "三角筋中部。軽くていいから丁寧に、最後は焼き切る" }
   ];
   if (week <= 12) return [
+    { name: "ミリタリープレス(立ち・バーベル)", detail: () => "4セット × 6〜8回", note: "頭上に押す力はベンチの押し切り(三頭・前部三角筋)に直結する。バーベルなので2.5kg刻みで伸ばせる。手首が反って痛むならリストラップ。腰が気になる日は座ってやってもいい。ここからは重量を伸ばす種目として扱う" },
     { name: "止めベンチ(1秒止め)", detail: pct => `3セット × 3回 @ ${pct(.75)}kg`, note: "試技と同じ胸止めで強く" },
-    { name: "ダンベルショルダープレス", detail: () => "4セット × 8〜10回 @ 10kg(スロー)", note: "肩は押す力の底上げ。ゆっくり効かせて負荷を稼ぐ" },
-    { name: "サイドレイズ(PUMP Pro)", detail: () => "4セット × 12回(負荷UP)", note: "三角筋中部を成長させ続ける" },
-    { name: "加重ディップス", detail: () => "4セット × 5〜8回(リュックに重り)", note: "三頭を重さで。フォームが崩れない範囲で毎週+重量" }
+    { name: "サイドレイズ(PUMP Pro)", detail: () => "4セット × 12回(負荷UP)", note: "三角筋中部を成長させ続ける" }
   ];
   if (week <= 16) return [
     { name: "止めベンチ(1秒止め)", detail: pct => `2セット × 2回 @ ${pct(.80)}kg`, note: "高重量に慣れる。丁寧に" },
@@ -578,7 +576,7 @@ function buildDay1(wk, dateISO) {
     name: "ベンチプレス バックオフ", key: "back",
     detail: () => `${plan.back.sets}セット × ${plan.back.reps}回 @ ${pct(plan.back.pct)}kg`,
     weight: pct(plan.back.pct), reps: plan.back.reps, sets: plan.back.sets,
-    note: "ボリュームの主役。丁寧に同じフォームで"
+    note: "ボリュームの主役。1セットずつ余力を残して終える — 潰れるより回数をこなすほうが伸びる"
   });
   day1Accessories(wk).forEach(a => ex.push({ name: a.name, detail: () => a.detail(pct), note: a.note }));
   /* 週1だけの週: デッドのトップセットだけ最後に足して、脚も最低限だけ拾う */
@@ -649,7 +647,7 @@ function restSecFor(ex, week) {
   if (!ex || !ex.key) return 90;
   if (ex.key === "top")    return week >= 13 ? 300 : 180;   // ピーキング期は5分
   if (ex.key === "dl-top") return week >= 13 ? 300 : 240;
-  if (ex.key === "back")    return 150;
+  if (ex.key === "back")    return 180;   // 速筋タイプは3分ないとPCrが戻らない
   if (ex.key === "dl-back") return 180;
   if (ex.key === "ab" || ex.key === "abflex") return 60;
   return 90;
@@ -1025,6 +1023,8 @@ function homeMenu(week) {
   const fl = abFlexionHome(w);
   if (fl) items.push(fl);
   items.push({ key: "lr", name: "レッグレイズ(床)", detail: "3セット × 12〜15回", note: "腰を床に押しつけたまま脚を上げ下げ。下腹に効く。ぶら下がれる場所があればハンギングレッグレイズのほうが効果は上" });
+  if (w <= 12) items.push({ key: "dip", name: "ディップス", detail: "3セット × 8〜12回", note: "上腕が床と平行になるまで下ろして止める。それ以上深く沈めない(肩の前側を痛める一番の原因)。胸に効かせたいなら上体をやや前傾、三頭なら垂直に近く。ジムの日から離れた月曜あたりが最適。自重で12回が余裕になったらリュックに重りを入れて加重" });
+  else if (w <= 16) items.push({ key: "dip", name: "ディップス(軽め)", detail: "2セット × 8回", note: "上腕が床と平行になるまで下ろして止める。それ以上深く沈めない(肩の前側を痛める一番の原因)。胸に効かせたいなら上体をやや前傾、三頭なら垂直に近く。ジムの日から離れた月曜あたりが最適。ピーキング期は疲労を残さない範囲で" });
   if (w <= 6) items.push({ key: "pu", name: "腕立て伏せ", detail: "4セット × 15〜20回", note: "胸を床につく直前まで。ベンチの動きを忘れないための維持" });
   else if (w <= 12) items.push({ key: "pu", name: "腕立て伏せ(足上げ or スロー)", detail: "4セット × 12〜15回(3秒かけて下ろす)", note: "足を椅子に乗せて角度をつけると強度が上がる" });
   else items.push({ key: "pu", name: "腕立て伏せ(軽め)", detail: "3セット × 15回", note: "血流を回す程度でOK" });
@@ -1145,7 +1145,7 @@ function coachMessage(session, cond, adj) {
   }
   if (session.type === "rest") {
     if (adj.zone === "low") msgs.push("休むのも仕事のうち。今日はしっかり食べて寝よう。筋肉はジムじゃなく布団の中で強くなる。");
-    else msgs.push("今日は休養日。タンパク質は体重×2g、睡眠7時間以上。それが次のベンチの重量になる。動きたい日は下の<strong>自宅メニュー</strong>をどうぞ——アブローラー中心で、やってもやらなくてもプログラムは崩れない。");
+    else msgs.push("今日は休養日。タンパク質は体重×2g、睡眠7時間以上。それが次のベンチの重量になる。動きたい日は下の<strong>自宅メニュー</strong>をどうぞ——アブローラーと<strong>ディップス</strong>が中心。ジムの日から離れた月曜あたりに入れると、木曜のベンチに響かない。");
   }
   const hb = hrvBaseline();
   if (cond && cond.hrv > 0 && hb && cond.hrv < hb * 0.85) msgs.push(`⚠️ HRVが14日平均より15%以上低い(${Math.round(cond.hrv)}ms / 平均${Math.round(hb)}ms)。飲酒・寝不足・ストレスに心当たりは?`);
@@ -1831,6 +1831,8 @@ function renderProgram() {
     <p><strong>基準重量(TM)は自動で上下する。</strong>トップセットの下にある「届かなかった / 規定通り / 余裕あり」を毎回押しておくと、<strong>2回続けて未達なら基準を5%下げ、2回続けて余裕なら2.5kg上げる</strong>。コンディションがその日の予報なら、こっちは実際の結果。下がるのは失敗ではなく、基準が実力の少し先に行きすぎただけ——ここで一度引くと数週間後に必ず追い越せる。</p>
     <p><strong>休憩は計る。</strong>セットを終えてチェックを入れた瞬間に休憩タイマーが動き出す。ベンチのトップセットは3分(13週目以降は5分)、バックオフは2分半、補助種目は90秒。体感でやると必ず短くなって、同じ重量でも挙がる回数が落ちる。手動で始めたい時は⏱ボタン。</p>
     <p><strong>体重は毎朝。</strong>125kg達成まで減量は保留する方針だから、今は増量中。ただし増え方が速いと中身は脂肪で、あとの減量が長引くし、腹を分厚く見せたい目的とも逆になる。7日平均どうしを比べて週あたりの増加量を出し、速すぎ・遅すぎを判定する。1日単位のブレは水分なので気にしなくていい。</p>
+    <p><strong>バックオフは短いセットを多く。</strong>1セットの回数を減らしてセット数を増やしてある(例: 6回×4 → <strong>4回×5</strong>)。総レップ数はほぼ同じなのに、毎セット余力を残したまま終われるので後半で失速しない。一発は強いがバテやすいタイプには、これが一番効く組み方。休憩も<strong>3分</strong>取る——80kg級を挙げたあと、筋肉のクレアチンリン酸が戻るには3〜5分かかるので、2分半だと毎セット借金が溜まって3本目で表面化する。</p>
+    <p><strong>ディップスは自宅の別日に。</strong>ベンチの日の最後に置いても、その頃には胸も三頭も使い切っていて中身の薄い3セットになる。ジムの日から離れた<strong>月曜あたり</strong>に自宅で単独でやるほうが、同じ3セットでも効果が段違い。押す量を週に分散させる狙いもある。</p>
     <p><strong>腹筋は2方向でやる。</strong>アブローラーが鍛えてるのは腹筋というより<strong>「腰が反るのを腹圧で止める力」</strong>——デッドで腰が反り返るのを防ぐ、まさにその能力で、ベンチにも効く(胴体が硬いほど脚の力がバーに伝わる)。ただしこれは<strong>強くはするが厚くはしにくい</strong>。ブロックを分厚くしたいなら<strong>丸める方向</strong>——ケーブルクランチや加重クランチが必要で、こっちは重量を足せるぶん素直に肥大する。だからDay2と自宅メニューには必ず両方入れてある。</p>
     <p><strong>アブローラーは週数ではなくレベル制。</strong>膝コロ壁ストップ(Lv1)から加重立ちコロ(Lv6)まで6段階あって、記録カードの ◀ ▶ でいつでも変えられる。<strong>プログラムの週とは完全に独立</strong>——できるようになった日に上げればいい。各レベルに「次に上げる目安」が出るので、それを満たしたら1つ上げる。Lv6に入ると記録の単位がcmからkgに自動で切り替わる。<strong>腰を反らせないこと</strong>だけは全レベル共通で絶対。</p>
     <p><strong>脚のプレート事情。</strong>20kg×12枚(最大240kg)までなので、レッグプレスは重さより高回数・止め・スローで効かせる設計。頭打ちになったら片脚に切り替えて強度を上げる。</p>
