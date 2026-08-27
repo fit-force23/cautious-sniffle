@@ -586,7 +586,7 @@ function buildDay1(wk, dateISO) {
     weight: pct(plan.back.pct), reps: plan.back.reps, sets: plan.back.sets,
     note: "ボリュームの主役。1セットずつ余力を残して終える — 潰れるより回数をこなすほうが伸びる"
   });
-  day1Accessories(wk).forEach(a => ex.push({ name: a.name, detail: () => a.detail(pct), note: a.note }));
+  day1Accessories(wk).forEach(a => ex.push({ name: a.name, detail: () => a.detail(pct), note: a.note, acc: a.acc }));
   /* 週1だけの週: デッドのトップセットだけ最後に足して、脚も最低限だけ拾う */
   const solo = isSoloWeek();
   if (solo) {
@@ -636,7 +636,7 @@ function buildDay2(wk, dateISO) {
       note: "ベンチ125挑戦の週。デッドは無理せず、挑戦に疲労を残さない"
     });
   }
-  day2Accessories(wk).forEach(a => ex.push({ name: a.name, detail: () => a.detail(dpct), note: a.note }));
+  day2Accessories(wk).forEach(a => ex.push({ name: a.name, detail: () => a.detail(dpct), note: a.note, acc: a.acc }));
   /* アブローラーはDay2の最後に置く(次のベンチまで中5日あり、デッド前日に体幹を疲れさせない) */
   const ab = abRoller(wk);
   if (ab) ex.push({ name: ab.name, key: "ab", detail: () => ab.detail, note: ab.note });
