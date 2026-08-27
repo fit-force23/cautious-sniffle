@@ -218,6 +218,12 @@ nav.tabbar button.active { color: var(--series-1); }
   border-radius: 10px; padding: 9px 11px; font-size: .78rem; font-family: inherit; cursor: pointer; flex: 0 0 auto; }
 .rest-timer .rt-b:active { background: var(--grid); }
 /* 結果ボタン(未達/規定通り/余裕) */
+.acc-box { margin-top: 10px; padding: 10px; border-radius: 10px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.06); }
+.acc-sug { font-size: .82rem; line-height: 1.5; color: var(--text-muted); }
+.acc-sug b { color: var(--series-1); }
+.acc-sug.up { color: var(--series-1); font-weight: 600; }
+.acc-best { font-size: .78rem; color: var(--text-muted); margin-top: 4px; }
+.acc-box .btn-row { margin-top: 8px; }
 .res-row { display: flex; gap: 6px; margin-top: 8px; }
 .res-row button { flex: 1; background: var(--page); border: 1px solid var(--grid); color: var(--text-secondary);
   border-radius: 10px; padding: 8px 4px; font-size: .74rem; font-family: inherit; cursor: pointer; }
@@ -358,6 +364,7 @@ const DEFAULTS = {
   profile: null, // {maxStart, goal, day1, day2, startDate, tm, dlTm, abLevel}
   progress: { week: 1, history: [], solo: false }, // 実施ベースの週カウンター(日付に依存しない)。solo=今週はDay1だけ
   logs: {},      // dateISO -> {sets:{exIdx:[bool,...]}, topWeight, topReps, e1rm, note}
+  acc: {},       // 補助種目の記録。key -> [{d: dateISO, w: kg(0=自重), r: reps}]
   condition: {}, // dateISO -> {score, src, readiness, sleepScore, hrv, rhr, subjective}
   tokens: { oura: "", fitbit: "" },
   weights: {},   // dateISO -> kg
@@ -369,6 +376,7 @@ function save() { Store.set("bench125", S); }
 /* 古い保存データ・古いバックアップでも壊れないように入れ物を補う */
 function migrate() {
   if (!S.weights) S.weights = {};                     // dateISO -> kg
+  if (!S.acc) S.acc = {};                             // 補助種目キー -> [{d,w,r}] 漸進的過負荷の記録
   if (!S.logs) S.logs = {};
   if (!S.condition) S.condition = {};
   if (!S.tokens) S.tokens = { oura: "", fitbit: "" };
@@ -447,18 +455,18 @@ const DL_PLAN = {
 /* Day1(ベンチの日)の補助種目 — 押す系(胸・肩・三頭)。pctはベンチTM基準 */
 function day1Accessories(week) {
   if (week <= 6) return [
-    { name: "ミリタリープレス(立ち・バーベル)", detail: () => "3セット × 8回 @ 40kg目安", note: "頭上に押す力はベンチの押し切り(三頭・前部三角筋)に直結する。バーベルなので2.5kg刻みで伸ばせる。手首が反って痛むならリストラップ。腰が気になる日は座ってやってもいい。40kgから始めて、8回×3が余裕になったら+2.5kg" },
     { name: "止めベンチ(2秒止め)", detail: pct => `3セット × 6回 @ ${pct(.65)}kg`, note: "胸で完全に止めて爆発。ケツ上げ癖の矯正に最重要" },
-    { name: "サイドレイズ(PUMP Pro or ダンベル)", detail: () => "4セット × 15回", note: "三角筋中部。軽くていいから丁寧に、最後は焼き切る" }
+    { acc: { key: "mp", lo: 6, hi: 8, inc: 2.5 }, name: "ミリタリープレス(立ち・バーベル)", detail: () => "3セット × 8回 @ 40kg目安", note: "頭上に押す力はベンチの押し切り(三頭・前部三角筋)に直結する。バーベルなので2.5kg刻みで伸ばせる。手首が反って痛むならリストラップ。腰が気になる日は座ってやってもいい。ベンチ台を使う種目を全部終えてから移るので、セットアップの切り替えは1回で済む。40kgから始めて、8回×3が余裕になったら+2.5kg" },
+    { acc: { key: "side", lo: 12, hi: 15, inc: 1 }, name: "サイドレイズ(PUMP Pro or ダンベル)", detail: () => "4セット × 15回", note: "三角筋中部。軽くていいから丁寧に、最後は焼き切る" }
   ];
   if (week <= 12) return [
-    { name: "ミリタリープレス(立ち・バーベル)", detail: () => "4セット × 6〜8回", note: "頭上に押す力はベンチの押し切り(三頭・前部三角筋)に直結する。バーベルなので2.5kg刻みで伸ばせる。手首が反って痛むならリストラップ。腰が気になる日は座ってやってもいい。ここからは重量を伸ばす種目として扱う" },
     { name: "止めベンチ(1秒止め)", detail: pct => `3セット × 3回 @ ${pct(.75)}kg`, note: "試技と同じ胸止めで強く" },
-    { name: "サイドレイズ(PUMP Pro)", detail: () => "4セット × 12回(負荷UP)", note: "三角筋中部を成長させ続ける" }
+    { acc: { key: "mp", lo: 6, hi: 8, inc: 2.5 }, name: "ミリタリープレス(立ち・バーベル)", detail: () => "4セット × 6〜8回", note: "頭上に押す力はベンチの押し切り(三頭・前部三角筋)に直結する。バーベルなので2.5kg刻みで伸ばせる。手首が反って痛むならリストラップ。腰が気になる日は座ってやってもいい。ベンチ関連を終えてから移動する。ここからは重量を伸ばす種目として扱う" },
+    { acc: { key: "side", lo: 10, hi: 12, inc: 1 }, name: "サイドレイズ(PUMP Pro)", detail: () => "4セット × 12回(負荷UP)", note: "三角筋中部を成長させ続ける" }
   ];
   if (week <= 16) return [
     { name: "止めベンチ(1秒止め)", detail: pct => `2セット × 2回 @ ${pct(.80)}kg`, note: "高重量に慣れる。丁寧に" },
-    { name: "サイドレイズ(軽め)", detail: () => "3セット × 15回", note: "血流を回す程度でOK。疲労を持ち越さない" }
+    { acc: { key: "side", lo: 12, hi: 15, inc: 1 }, name: "サイドレイズ(軽め)", detail: () => "3セット × 15回", note: "血流を回す程度でOK。疲労を持ち越さない" }
   ];
   if (week === 17) return [
     { name: "止めベンチ(軽く爆発)", detail: pct => `2セット × 3回 @ ${pct(.55)}kg`, note: "テーパー。速く挙げる意識だけ、疲れは残さない" }
@@ -471,15 +479,15 @@ function day1Accessories(week) {
 function day2Accessories(week) {
   const legNote = "プレートは20kg×12枚まで。重さが頭打ちなら1秒止め→2秒止め→スロー(4秒下ろし)→片脚で強度を上げる";
   if (week <= 6) return [
-    { name: "レッグプレス(高回数)", detail: () => "3セット × 15〜20回(1秒止め)", note: "大腿四頭筋。" + legNote },
+    { acc: { key: "legpress", lo: 15, hi: 20, inc: 20 }, name: "レッグプレス(高回数)", detail: () => "3セット × 15〜20回(1秒止め)", note: "大腿四頭筋。" + legNote },
     { name: "懸垂", detail: () => "5セットで合計25〜30回", note: "肩甲骨を寄せて下ろしきる。背中とデッドの引きの土台" },
-    { name: "ハンマーカール(PUMP Pro or ダンベル)", detail: () => "3セット × 12回", note: "前腕の厚み(腕橈骨筋)。デッドの握りにも効く" },
+    { acc: { key: "hammer", lo: 10, hi: 12, inc: 1 }, name: "ハンマーカール(PUMP Pro or ダンベル)", detail: () => "3セット × 12回", note: "前腕の厚み(腕橈骨筋)。デッドの握りにも効く" },
     { name: "デッドハング(ぶら下がり)", detail: () => "3セット × 30〜60秒", note: "握力。そのままデッドリフトの保険になる" }
   ];
   if (week <= 12) return [
-    { name: "レッグプレス(効かせ重視)", detail: () => "4セット × 12〜15回(2秒止め)", note: "大腿四頭筋。" + legNote },
-    { name: "加重懸垂 or 懸垂", detail: () => "5セット × 5〜8回", note: "背中を重さで。余裕が出たらリュック加重" },
-    { name: "ハンマーカール", detail: () => "3セット × 12回(負荷UP)", note: "前腕を育て続ける" },
+    { acc: { key: "legpress", lo: 12, hi: 15, inc: 20 }, name: "レッグプレス(効かせ重視)", detail: () => "4セット × 12〜15回(2秒止め)", note: "大腿四頭筋。" + legNote },
+    { acc: { key: "pullup", lo: 5, hi: 8, inc: 2.5 }, name: "加重懸垂 or 懸垂", detail: () => "5セット × 5〜8回", note: "背中を重さで。余裕が出たらリュック加重" },
+    { acc: { key: "hammer", lo: 10, hi: 12, inc: 1 }, name: "ハンマーカール", detail: () => "3セット × 12回(負荷UP)", note: "前腕を育て続ける" },
     { name: "デッドハング", detail: () => "3セット × 45〜60秒", note: "握力の底上げ。デッドの後半が変わる" }
   ];
   if (week <= 16) return [
@@ -637,6 +645,71 @@ function buildDay2(wk, dateISO) {
   return { type: "day2", title: `Day2 デッド+脚の日`, week: wk, exercises: ex, plan: dl };
 }
 
+
+/* ================================================================
+   補助種目の漸進的過負荷(プログレッシブ・オーバーロード)
+   ベンチとデッドはTMから毎週の重量が決まるが、補助種目は放っておくと
+   何年でも同じ重さになる。「回数が上限に届いたら重量を1段上げ、
+   回数を下限に戻してまた積む」= ダブルプログレッションで前へ進める。
+================================================================ */
+function accHist(key) { return (S.acc && S.acc[key]) || []; }
+function accLast(key) { const h = accHist(key); return h.length ? h[h.length - 1] : null; }
+function accBest(key) {
+  const h = accHist(key);
+  if (!h.length) return null;
+  return h.slice().sort((a, b) => (a.w - b.w) || (a.r - b.r)).pop();   // 重量優先、同重量なら回数
+}
+function setAcc(key, dateISO, w, r) {
+  if (!S.acc) S.acc = {};
+  const h = S.acc[key] = (S.acc[key] || []).filter(x => x.d !== dateISO);
+  if (r > 0) h.push({ d: dateISO, w: Math.max(0, Math.round((w || 0) * 10) / 10), r: Math.round(r) });
+  h.sort((a, b) => a.d < b.d ? -1 : 1);
+  if (h.length > 60) h.splice(0, h.length - 60);
+  save();
+}
+function accWLabel(w) { return w > 0 ? w + "kg" : "自重"; }
+/* 次にやるべき重量と回数。これがオーバーロードの本体 */
+function accSuggest(key, cfg) {
+  const last = accLast(key);
+  if (!last) return { w: null, r: cfg.lo, msg: `初回。<b>${cfg.lo}〜${cfg.hi}回</b>できる重さを探して記録するところから。次回からここが目標を出す` };
+  const nextW = Math.round((last.w + cfg.inc) * 10) / 10;
+  if (last.r >= cfg.hi) return { w: nextW, r: cfg.lo, up: true,
+    msg: `前回 ${accWLabel(last.w)}×${last.r}回で上限クリア。今日は <b>${accWLabel(nextW)} × ${cfg.lo}回</b> に上げる` };
+  if (last.r < cfg.lo) return { w: last.w, r: cfg.lo,
+    msg: `前回 ${accWLabel(last.w)}×${last.r}回。今日も <b>${accWLabel(last.w)}</b> のまま、まず <b>${cfg.lo}回</b> を取りに行く` };
+  return { w: last.w, r: last.r + 1,
+    msg: `前回 ${accWLabel(last.w)}×${last.r}回。今日は同じ <b>${accWLabel(last.w)}</b> で <b>${last.r + 1}回</b>。${cfg.hi}回まで届いたら次回 +${cfg.inc}kg` };
+}
+/* 種目カードの中に出す記録ブロック */
+function accBlock(cfg, t, onDone) {
+  const wrap = el("div", "acc-box");
+  const sug = accSuggest(cfg.key, cfg);
+  const best = accBest(cfg.key);
+  const today = accHist(cfg.key).filter(x => x.d === t)[0];
+  wrap.appendChild(el("div", "acc-sug" + (sug.up ? " up" : ""), (sug.up ? "⬆️ " : "🎯 ") + sug.msg));
+  if (best) wrap.appendChild(el("div", "acc-best", `自己ベスト ${accWLabel(best.w)} × ${best.r}回 <span style="opacity:.6">(${best.d.slice(5).replace("-", "/")})</span>`));
+  const row = el("div", "btn-row");
+  const wIn = document.createElement("input");
+  wIn.type = "number"; wIn.step = String(cfg.inc); wIn.min = "0"; wIn.inputMode = "decimal";
+  wIn.placeholder = "重量kg";
+  wIn.value = today ? today.w : (sug.w === null || sug.w === undefined ? "" : sug.w);
+  const rIn = document.createElement("input");
+  rIn.type = "number"; rIn.step = "1"; rIn.min = "0"; rIn.inputMode = "numeric";
+  rIn.placeholder = "回数"; rIn.value = today ? today.r : "";
+  const b = el("button", "btn small", today ? "更新" : "記録");
+  b.style.flex = "0 0 auto";
+  b.onclick = () => {
+    const r = parseFloat(rIn.value);
+    if (!r) return;
+    setAcc(cfg.key, t, parseFloat(wIn.value) || 0, r);
+    if (onDone) onDone();
+  };
+  row.appendChild(wIn); row.appendChild(rIn); row.appendChild(b);
+  wrap.appendChild(row);
+  wrap.appendChild(el("div", "small-note", "その日いちばん良かったセットの重量×回数を入れる。自重なら重量は0でOK"));
+  return wrap;
+}
+
 /* ================================================================
    インターバルタイマー
    セット間の休憩は「体感」でやると必ず短くなる。短いと同じ重量でも
@@ -775,10 +848,14 @@ function warmupCard(session, adj) {
 const RESULT_LABEL = { miss: "未達", hit: "規定通り", easy: "余裕あり" };
 function resultKey(kind) { return kind === "dl" ? "dlResult" : "topResult"; }
 function markKey(kind) { return kind === "dl" ? "tmMarkDl" : "tmMarkBench"; }
+function isDeloadWeek(w) {
+  const p = WEEK_PLAN[Math.max(1, Math.min(17, w || 1))];
+  return !!(p && p.deload);
+}
 function recentResults(kind, n) {
   const k = resultKey(kind);
   return Object.keys(S.logs || {}).sort()
-    .filter(d => S.logs[d] && S.logs[d][k])
+    .filter(d => S.logs[d] && S.logs[d][k] && !isDeloadWeek(S.logs[d].week))
     .slice(-n).map(d => ({ date: d, r: S.logs[d][k] }));
 }
 function setTopResult(dateISO, kind, val) {
@@ -792,6 +869,9 @@ function setTopResult(dateISO, kind, val) {
 }
 function evaluateTM(kind) {
   if (!S.profile) return null;
+  /* 回復週(デロード)は意図的に軽い。そこで出た「余裕あり」は強くなった証拠に
+     ならないので、判定材料から外す */
+  if (isDeloadWeek(currentWeek())) return null;
   const isDL = kind === "dl";
   const cur = isDL ? (S.profile.dlTm || 125) : S.profile.tm;
   const last = recentResults(kind, 2);
@@ -1023,7 +1103,7 @@ function homeMenu(week) {
   const fl = abFlexionHome(w);
   if (fl) items.push(fl);
   items.push({ key: "lr", name: "レッグレイズ(床)", detail: "3セット × 12〜15回", note: "腰を床に押しつけたまま脚を上げ下げ。下腹に効く。ぶら下がれる場所があればハンギングレッグレイズのほうが効果は上" });
-  if (w <= 12) items.push({ key: "dip", name: "ディップス", detail: "3セット × 8〜12回", note: "上腕が床と平行になるまで下ろして止める。それ以上深く沈めない(肩の前側を痛める一番の原因)。胸に効かせたいなら上体をやや前傾、三頭なら垂直に近く。ジムの日から離れた月曜あたりが最適。自重で12回が余裕になったらリュックに重りを入れて加重" });
+  if (w <= 12) items.push({ key: "dip", acc: { key: "dip", lo: 8, hi: 12, inc: 2.5 }, name: "ディップス", detail: "3セット × 8〜12回", note: "上腕が床と平行になるまで下ろして止める。それ以上深く沈めない(肩の前側を痛める一番の原因)。胸に効かせたいなら上体をやや前傾、三頭なら垂直に近く。ジムの日から離れた月曜あたりが最適。自重で12回が余裕になったらリュックに重りを入れて加重" });
   else if (w <= 16) items.push({ key: "dip", name: "ディップス(軽め)", detail: "2セット × 8回", note: "上腕が床と平行になるまで下ろして止める。それ以上深く沈めない(肩の前側を痛める一番の原因)。胸に効かせたいなら上体をやや前傾、三頭なら垂直に近く。ジムの日から離れた月曜あたりが最適。ピーキング期は疲労を残さない範囲で" });
   if (w <= 6) items.push({ key: "pu", name: "腕立て伏せ", detail: "4セット × 15〜20回", note: "胸を床につく直前まで。ベンチの動きを忘れないための維持" });
   else if (w <= 12) items.push({ key: "pu", name: "腕立て伏せ(足上げ or スロー)", detail: "4セット × 12〜15回(3秒かけて下ろす)", note: "足を椅子に乗せて角度をつけると強度が上がる" });
@@ -1577,6 +1657,8 @@ function renderToday() {
         row.appendChild(tbtn);
         exEl.appendChild(row);
       }
+      /* 補助種目の記録と次回の目標 */
+      if (ex.acc) exEl.appendChild(accBlock(ex.acc, t, renderToday));
       /* トップセットの出来 → TMの自動調整 */
       if ((ex.key === "top" || ex.key === "dl-top") && (session.type === "day1" || session.type === "day2")) {
         const kind = ex.key === "dl-top" ? "dl" : "bench";
@@ -1689,6 +1771,7 @@ function renderToday() {
           S.logs[t] = L; save(); renderToday();
         };
         row.appendChild(chip);
+        if (r.acc) row.appendChild(accBlock(r.acc, t, renderToday));
         hc.appendChild(row);
       });
       hc.appendChild(el("div", "divider"));
@@ -1831,6 +1914,7 @@ function renderProgram() {
     <p><strong>基準重量(TM)は自動で上下する。</strong>トップセットの下にある「届かなかった / 規定通り / 余裕あり」を毎回押しておくと、<strong>2回続けて未達なら基準を5%下げ、2回続けて余裕なら2.5kg上げる</strong>。コンディションがその日の予報なら、こっちは実際の結果。下がるのは失敗ではなく、基準が実力の少し先に行きすぎただけ——ここで一度引くと数週間後に必ず追い越せる。</p>
     <p><strong>休憩は計る。</strong>セットを終えてチェックを入れた瞬間に休憩タイマーが動き出す。ベンチのトップセットは3分(13週目以降は5分)、バックオフは2分半、補助種目は90秒。体感でやると必ず短くなって、同じ重量でも挙がる回数が落ちる。手動で始めたい時は⏱ボタン。</p>
     <p><strong>体重は毎朝。</strong>125kg達成まで減量は保留する方針だから、今は増量中。ただし増え方が速いと中身は脂肪で、あとの減量が長引くし、腹を分厚く見せたい目的とも逆になる。7日平均どうしを比べて週あたりの増加量を出し、速すぎ・遅すぎを判定する。1日単位のブレは水分なので気にしなくていい。</p>
+    <p><strong>補助種目は「回数が上限に届いたら重量を1段上げる」。</strong>ベンチとデッドは基準重量(TM)から毎週の重さが自動で決まるが、サイドレイズやミリタリープレスのような補助種目は放っておくと何年でも同じ重さになる。だから各種目に<strong>目標の回数レンジ</strong>を持たせて、上限まで届いた日の次回に重量を1段上げ、回数を下限に戻してまた積み直す——これが<strong>漸進的過負荷(プログレッシブ・オーバーロード)</strong>で、このアプリの名前そのもの。種目カードの記録欄に「今日は何kgで何回」を出すので、それに従うだけでいい。</p>
     <p><strong>バックオフは短いセットを多く。</strong>1セットの回数を減らしてセット数を増やしてある(例: 6回×4 → <strong>4回×5</strong>)。総レップ数はほぼ同じなのに、毎セット余力を残したまま終われるので後半で失速しない。一発は強いがバテやすいタイプには、これが一番効く組み方。休憩も<strong>3分</strong>取る——80kg級を挙げたあと、筋肉のクレアチンリン酸が戻るには3〜5分かかるので、2分半だと毎セット借金が溜まって3本目で表面化する。</p>
     <p><strong>ディップスは自宅の別日に。</strong>ベンチの日の最後に置いても、その頃には胸も三頭も使い切っていて中身の薄い3セットになる。ジムの日から離れた<strong>月曜あたり</strong>に自宅で単独でやるほうが、同じ3セットでも効果が段違い。押す量を週に分散させる狙いもある。</p>
     <p><strong>腹筋は2方向でやる。</strong>アブローラーが鍛えてるのは腹筋というより<strong>「腰が反るのを腹圧で止める力」</strong>——デッドで腰が反り返るのを防ぐ、まさにその能力で、ベンチにも効く(胴体が硬いほど脚の力がバーに伝わる)。ただしこれは<strong>強くはするが厚くはしにくい</strong>。ブロックを分厚くしたいなら<strong>丸める方向</strong>——ケーブルクランチや加重クランチが必要で、こっちは重量を足せるぶん素直に肥大する。だからDay2と自宅メニューには必ず両方入れてある。</p>
